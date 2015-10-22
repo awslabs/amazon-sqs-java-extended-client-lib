@@ -1,18 +1,8 @@
 Amazon SQS Java Extended Client Library
 ========================================
-The **Amazon SQS Java Extended Client Library** enables you to manage Amazon SQS message payloads with Amazon S3. This is especially useful for storing and retrieving messages with a message payload size greater than the current SQS limit of 256 KB. Specifically, you can use this library to:
-
-* Specify whether message payloads are always stored in Amazon S3 or only when a message's size exceeds 256 KB.
-
-* Send a message that references a single message object stored in an Amazon S3 bucket.
-
-* Get the corresponding message object from an Amazon S3 bucket.
-
-* Delete the corresponding message object from an Amazon S3 bucket.
-
-You can download release builds through the [releases section of this](https://github.com/awslabs/amazon-sqs-java-extended-client-lib) project.
-
-For more information on using the amazon-sqs-java-extended-client-lib, see our getting started guide to SQS [here](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/jmsclient.html).
+The **Amazon SQS Java Extended Client Library** enables sending and receiving large messages via Amazon S3.
+* You can download release builds through the [releases section of this](https://github.com/awslabs/amazon-sqs-java-extended-client-lib) project.
+* For more information on using the amazon-sqs-java-extended-client-lib, see our getting started guide to SQS [here](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/jmsclient.html).
 
 ##Getting Started
 

@@ -15,16 +15,11 @@
 package com.amazon.sqs.javamessaging;
 
 class SQSExtendedClientConstants {
-
-	public static final String MESSAGE_ATTRIB_NAME = "SQSLargePayloadSize";
+	public static final String RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
 	public static final int MAX_ALLOWED_ATTRIBUTES = 9;
-	public static final String ERROR_MESSAGE_HEADER = "Error in Amazon SQS extended client.";
-	public static final String WARNING_MESSAGE_HEADER = "Warning in Amazon SQS extended client.";
-	public static final int DEFAULT_MESSAGE_SIZE_THRESH = 262144;
-
-	// has '-' to avoid collision with Base64 receipt handles
-	// has'..' to avoid collision with allowed bucket names
+	public static final int DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144;
 	public static final String S3_BUCKET_NAME_MARKER = "-..s3BucketName..-";
 	public static final String S3_KEY_MARKER = "-..s3Key..-";
 
+	static final String USER_AGENT_HEADER = "/SQS Java Extended Client v1.0.0";
 }

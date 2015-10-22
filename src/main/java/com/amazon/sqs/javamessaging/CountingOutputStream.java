@@ -14,32 +14,34 @@
  */
 package com.amazon.sqs.javamessaging;
 
-class MessageS3Pointer {
-	private String s3BucketName;
-	private String s3Key;
+import java.io.OutputStream;
 
-	public MessageS3Pointer() {
+/**
+ * This class is used for checking the size of a string without copying the
+ * whole string into memory and converting it to bytes array. Compared to
+ * String.getBytes().length, it is more efficient and reliable for large
+ * strings.
+ */
+public class CountingOutputStream extends OutputStream {
+	private long totalSize;
+
+	@Override
+	public void write(int b) {
+		++totalSize;
 	}
 
-	public MessageS3Pointer(String s3BucketName, String s3Key) {
-		this.s3BucketName = s3BucketName;
-		this.s3Key = s3Key;
+	@Override
+	public void write(byte[] b) {
+		totalSize += b.length;
 	}
 
-	public String getS3BucketName() {
-		return s3BucketName;
+	@Override
+	public void write(byte[] b, int offset, int len) {
+
+		totalSize += len;
 	}
 
-	public void setS3BucketName(String s3BucketName) {
-		this.s3BucketName = s3BucketName;
+	public long getTotalSize() {
+		return totalSize;
 	}
-
-	public String getS3Key() {
-		return s3Key;
-	}
-
-	public void setS3Key(String s3Key) {
-		this.s3Key = s3Key;
-	}
-
 }

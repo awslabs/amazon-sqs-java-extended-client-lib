@@ -23,10 +23,12 @@ public interface AmazonSQSExtended extends AmazonSQS {
 	 * Enables support for large-payload messages.
 	 * 
 	 * @param s3
-	 *            Amazon S3 client which is going to be used for storing large-payload messages.
+	 *            Amazon S3 client which is going to be used for storing
+	 *            large-payload messages.
 	 * @param s3BucketName
-	 *            Name of the bucket which is going to be used for storing large-payload messages. The bucket must be
-	 *            already created and configured in s3.
+	 *            Name of the bucket which is going to be used for storing
+	 *            large-payload messages. The bucket must be already created and
+	 *            configured in s3.
 	 */
 	public void enableLargePayloadSupport(AmazonS3 s3, String s3BucketName);
 
@@ -43,14 +45,16 @@ public interface AmazonSQSExtended extends AmazonSQS {
 	public boolean hasLargePayloadSupport();
 
 	/**
-	 * Gets the Amazon S3 client which is being used for storing large-payload messages.
+	 * Gets the Amazon S3 client which is being used for storing large-payload
+	 * messages.
 	 * 
 	 * @return Reference to the Amazon S3 client which is being used.
 	 */
 	public AmazonS3 getAmazonS3Client();
 
 	/**
-	 * Gets the name of the S3 bucket which is being used for storing large-payload messages.
+	 * Gets the name of the S3 bucket which is being used for storing
+	 * large-payload messages.
 	 * 
 	 * @return The name of the bucket which is being used.
 	 */
@@ -60,29 +64,35 @@ public interface AmazonSQSExtended extends AmazonSQS {
 	 * Sets the message size threshold for storing message-payloads in S3.
 	 * 
 	 * @param messageSizeThreshold
-	 *            Message size threshold to be used for storing in S3. Default: 256KB.
+	 *            Message size threshold to be used for storing in S3. Default:
+	 *            256KB.
 	 */
 	public void setMessageSizeThreshold(int messageSizeThreshold);
 
 	/**
 	 * Gets the message size threshold for storing message-payloads in S3.
 	 * 
-	 * @return Message size threshold which is being used for storing in S3. Default: 256KB.
+	 * @return Message size threshold which is being used for storing in S3.
+	 *         Default: 256KB.
 	 */
 	public int getMessageSizeThreshold();
 
 	/**
-	 * Sets whether or not all messages regardless of their payload size should be stored in S3.
+	 * Sets whether or not all messages regardless of their payload size should
+	 * be stored in S3.
 	 * 
 	 * @param alwaysThroughS3
-	 *            Whether or not all messages regardless of their payload size should be stored in S3. Default: false
+	 *            Whether or not all messages regardless of their payload size
+	 *            should be stored in S3. Default: false
 	 */
 	public void setAlwaysThroughS3(boolean alwaysThroughS3);
 
 	/**
-	 * Checks whether or not all messages regardless of their payload size are being stored in S3.
+	 * Checks whether or not all messages regardless of their payload size are
+	 * being stored in S3.
 	 * 
-	 * @return True if all messages regardless of their payload size are being stored in S3. Default: false
+	 * @return True if all messages regardless of their payload size are being
+	 *         stored in S3. Default: false
 	 */
 	public boolean isAlwaysThroughS3();
 
