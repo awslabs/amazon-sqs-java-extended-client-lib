@@ -6,7 +6,7 @@
 
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.0.1-SNAPSHOT</version>
+  <version>1.0.0</version>
   <packaging>jar</packaging>
   <name>Amazon SQS Java Extended Client Library</name>
   <description>The Amazon SQS Java Extended Client Library enables sending and receiving large messages via Amazon S3.
@@ -37,7 +37,7 @@
   </developers>
 
   <properties>
-    <aws-java-sdk.version>1.9.6</aws-java-sdk.version>
+    <aws-java-sdk.version>1.10.27</aws-java-sdk.version>
   </properties>
 
   <dependencies>
@@ -55,17 +55,16 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.11</version>
+      <version>4.12</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>1.10.8</version>
+      <version>1.10.19</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
-
   <build>
     <pluginManagement>
       <plugins>

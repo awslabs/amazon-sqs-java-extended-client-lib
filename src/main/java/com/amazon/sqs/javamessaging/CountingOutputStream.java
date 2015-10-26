@@ -15,14 +15,34 @@
 
 package com.amazon.sqs.javamessaging;
 
-import com.amazonaws.util.VersionInfoUtils;
+import java.io.OutputStream;
 
-class SQSExtendedClientConstants {
-	public static final String RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
-	public static final int MAX_ALLOWED_ATTRIBUTES = 9;
-	public static final int DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144;
-	public static final String S3_BUCKET_NAME_MARKER = "-..s3BucketName..-";
-	public static final String S3_KEY_MARKER = "-..s3Key..-";
+/**
+ * This class is used for checking the size of a string without copying the
+ * whole string into memory and converting it to bytes array. Compared to
+ * String.getBytes().length, it is more efficient and reliable for large
+ * strings.
+ */
+class CountingOutputStream extends OutputStream {
+	private long totalSize;
 
-	static final String USER_AGENT_HEADER = AmazonSQSExtendedClient.class.getSimpleName() + "/" + VersionInfoUtils.getVersion();
+	@Override
+	public void write(int b) {
+		++totalSize;
+	}
+
+	@Override
+	public void write(byte[] b) {
+		totalSize += b.length;
+	}
+
+	@Override
+	public void write(byte[] b, int offset, int len) {
+
+		totalSize += len;
+	}
+
+	public long getTotalSize() {
+		return totalSize;
+	}
 }
