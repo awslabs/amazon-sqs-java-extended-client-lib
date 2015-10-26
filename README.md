@@ -12,7 +12,7 @@ The **Amazon SQS Extended Client Library for Java** enables you to manage Amazon
 
 You can download release builds through the [releases section of this](https://github.com/awslabs/amazon-sqs-java-extended-client-lib) project.
 
-For more information on using the amazon-sqs-java-extended-client-lib, see our getting started guide to SQS [here](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/jmsclient.html).
+For more information on using the amazon-sqs-java-extended-client-lib, see our getting started guide [here](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/s3-messages.html).
 
 ##Getting Started
 
