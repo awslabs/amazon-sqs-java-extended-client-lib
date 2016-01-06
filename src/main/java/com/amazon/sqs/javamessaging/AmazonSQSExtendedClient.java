@@ -30,6 +30,7 @@ import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
@@ -911,7 +912,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
 		String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
 		try {
-			clientConfiguration.getAmazonS3Client().deleteObject(s3MsgBucketName, s3MsgKey);
+			clientConfiguration.getAmazonS3Client().deleteObject(new DeleteObjectRequest(s3MsgBucketName, s3MsgKey));
 		} catch (AmazonServiceException e) {
 			String errorMessage = "Failed to delete the S3 object which contains the SQS message payload. SQS message was not deleted.";
 			LOG.error(errorMessage, e);
