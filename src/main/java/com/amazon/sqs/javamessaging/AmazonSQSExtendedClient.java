@@ -45,12 +45,12 @@ import org.apache.commons.logging.LogFactory;
  * Amazon SQS Extended Client extends the functionality of Amazon SQS client.
  * All service calls made using this client are blocking, and will not return
  * until the service call completes.
- *
+ * <p/>
  * <p>
  * The Amazon SQS extended client enables sending and receiving large messages
  * via Amazon S3. You can use this library to:
  * </p>
- *
+ * <p/>
  * <ul>
  * <li>Specify whether messages are always stored in Amazon S3 or only when a
  * message size exceeds 256 KB.</li>
@@ -69,13 +69,12 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * Constructs a new Amazon SQS extended client to invoke service methods on
 	 * Amazon SQS with extended functionality using the specified Amazon SQS
 	 * client object.
-	 *
-	 * <p>
+	 * <p/>
+	 * <p/>
 	 * All service calls made using this new client object are blocking, and
 	 * will not return until the service call completes.
 	 *
-	 * @param sqsClient
-	 *            The Amazon SQS client to use to connect to Amazon SQS.
+	 * @param sqsClient The Amazon SQS client to use to connect to Amazon SQS.
 	 */
 	public AmazonSQSExtendedClient(AmazonSQS sqsClient) {
 		this(sqsClient, new ExtendedClientConfiguration());
@@ -85,16 +84,14 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * Constructs a new Amazon SQS extended client to invoke service methods on
 	 * Amazon SQS with extended functionality using the specified Amazon SQS
 	 * client object.
-	 *
-	 * <p>
+	 * <p/>
+	 * <p/>
 	 * All service calls made using this new client object are blocking, and
 	 * will not return until the service call completes.
 	 *
-	 * @param sqsClient
-	 *            The Amazon SQS client to use to connect to Amazon SQS.
-	 * @param extendedClientConfig
-	 *            The extended client configuration options controlling the
-	 *            functionality of this client.
+	 * @param sqsClient            The Amazon SQS client to use to connect to Amazon SQS.
+	 * @param extendedClientConfig The extended client configuration options controlling the
+	 *                             functionality of this client.
 	 */
 	public AmazonSQSExtendedClient(AmazonSQS sqsClient, ExtendedClientConfiguration extendedClientConfig) {
 		super(sqsClient);
@@ -113,27 +110,21 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * characters not included in the list, your request will be rejected. #x9 |
 	 * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
 	 * </p>
-	 *
+	 * <p/>
 	 * <b>IMPORTANT:</b> The input object may be modified by the method. </p>
 	 *
-	 * @param sendMessageRequest
-	 *            Container for the necessary parameters to execute the
-	 *            SendMessage service method on AmazonSQS.
-	 *
+	 * @param sendMessageRequest Container for the necessary parameters to execute the
+	 *                           SendMessage service method on AmazonSQS.
 	 * @return The response from the SendMessage service method, as returned by
-	 *         AmazonSQS.
-	 *
+	 * AmazonSQS.
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException           If any internal errors are encountered inside the client
+	 *                                         while attempting to make the request or handle the response.
+	 *                                         For example if a network connection is not available.
+	 * @throws AmazonServiceException          If an error response is returned by AmazonSQS indicating
+	 *                                         either a problem with the data in the request, or a server
+	 *                                         side issue.
 	 */
 	public SendMessageResult sendMessage(SendMessageRequest sendMessageRequest) {
 
@@ -174,26 +165,19 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
 	 * </p>
 	 *
-	 * @param queueUrl
-	 *            The URL of the Amazon SQS queue to take action on.
-	 * @param messageBody
-	 *            The message to send. For a list of allowed characters, see the
-	 *            preceding important note.
-	 *
+	 * @param queueUrl    The URL of the Amazon SQS queue to take action on.
+	 * @param messageBody The message to send. For a list of allowed characters, see the
+	 *                    preceding important note.
 	 * @return The response from the SendMessage service method, as returned by
-	 *         AmazonSQS.
-	 *
+	 * AmazonSQS.
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException           If any internal errors are encountered inside the client
+	 *                                         while attempting to make the request or handle the response.
+	 *                                         For example if a network connection is not available.
+	 * @throws AmazonServiceException          If an error response is returned by AmazonSQS indicating
+	 *                                         either a problem with the data in the request, or a server
+	 *                                         side issue.
 	 */
 	public SendMessageResult sendMessage(String queueUrl, String messageBody) {
 		SendMessageRequest sendMessageRequest = new SendMessageRequest(queueUrl, messageBody);
@@ -224,7 +208,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 *
+	 * <p/>
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -258,7 +242,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 *
+	 * <p/>
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -282,23 +266,17 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * code so that it can handle new attributes gracefully.
 	 * </p>
 	 *
-	 * @param receiveMessageRequest
-	 *            Container for the necessary parameters to execute the
-	 *            ReceiveMessage service method on AmazonSQS.
-	 *
+	 * @param receiveMessageRequest Container for the necessary parameters to execute the
+	 *                              ReceiveMessage service method on AmazonSQS.
 	 * @return The response from the ReceiveMessage service method, as returned
-	 *         by AmazonSQS.
-	 *
+	 * by AmazonSQS.
 	 * @throws OverLimitException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException  If any internal errors are encountered inside the client
+	 *                                while attempting to make the request or handle the response.
+	 *                                For example if a network connection is not available.
+	 * @throws AmazonServiceException If an error response is returned by AmazonSQS indicating
+	 *                                either a problem with the data in the request, or a server
+	 *                                side issue.
 	 */
 	public ReceiveMessageResult receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
 
@@ -322,8 +300,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		for (Message message : messages) {
 
 			// for each received message check if they are stored in S3.
-			MessageAttributeValue largePayloadAttributeValue = message.getMessageAttributes().get(
-					SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+			MessageAttributeValue largePayloadAttributeValue = message.getMessageAttributes()
+																																.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
 			if (largePayloadAttributeValue != null) {
 				String messageBody = message.getBody();
 
@@ -343,8 +321,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				message.getMessageAttributes().remove(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
 
 				// Embed s3 object pointer in the receipt handle.
-				String modifiedReceiptHandle = embedS3PointerInReceiptHandle(message.getReceiptHandle(),
-						s3MsgBucketName, s3MsgKey);
+				String modifiedReceiptHandle = embedS3PointerInReceiptHandle(message.getReceiptHandle(), s3MsgBucketName, s3MsgKey);
 
 				message.setReceiptHandle(modifiedReceiptHandle);
 			}
@@ -376,7 +353,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 *
+	 * <p/>
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -410,7 +387,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 *
+	 * <p/>
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -434,22 +411,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * code so that it can handle new attributes gracefully.
 	 * </p>
 	 *
-	 * @param queueUrl
-	 *            The URL of the Amazon SQS queue to take action on.
-	 *
+	 * @param queueUrl The URL of the Amazon SQS queue to take action on.
 	 * @return The response from the ReceiveMessage service method, as returned
-	 *         by AmazonSQS.
-	 *
+	 * by AmazonSQS.
 	 * @throws OverLimitException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException  If any internal errors are encountered inside the client
+	 *                                while attempting to make the request or handle the response.
+	 *                                For example if a network connection is not available.
+	 * @throws AmazonServiceException If an error response is returned by AmazonSQS indicating
+	 *                                either a problem with the data in the request, or a server
+	 *                                side issue.
 	 */
 	public ReceiveMessageResult receiveMessage(String queueUrl) {
 		ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(queueUrl);
@@ -485,22 +456,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * once is not a problem.
 	 * </p>
 	 *
-	 * @param deleteMessageRequest
-	 *            Container for the necessary parameters to execute the
-	 *            DeleteMessage service method on AmazonSQS.
-	 *
-	 *
+	 * @param deleteMessageRequest Container for the necessary parameters to execute the
+	 *                             DeleteMessage service method on AmazonSQS.
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException           If any internal errors are encountered inside the client
+	 *                                         while attempting to make the request or handle the response.
+	 *                                         For example if a network connection is not available.
+	 * @throws AmazonServiceException          If an error response is returned by AmazonSQS indicating
+	 *                                         either a problem with the data in the request, or a server
+	 *                                         side issue.
 	 */
 	public void deleteMessage(DeleteMessageRequest deleteMessageRequest) {
 
@@ -556,25 +521,18 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * once is not a problem.
 	 * </p>
 	 *
-	 * @param queueUrl
-	 *            The URL of the Amazon SQS queue to take action on.
-	 * @param receiptHandle
-	 *            The receipt handle associated with the message to delete.
-	 *
+	 * @param queueUrl      The URL of the Amazon SQS queue to take action on.
+	 * @param receiptHandle The receipt handle associated with the message to delete.
 	 * @return The response from the DeleteMessage service method, as returned
-	 *         by AmazonSQS.
-	 *
+	 * by AmazonSQS.
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException           If any internal errors are encountered inside the client
+	 *                                         while attempting to make the request or handle the response.
+	 *                                         For example if a network connection is not available.
+	 * @throws AmazonServiceException          If an error response is returned by AmazonSQS indicating
+	 *                                         either a problem with the data in the request, or a server
+	 *                                         side issue.
 	 */
 	public void deleteMessage(String queueUrl, String receiptHandle) {
 		DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest(queueUrl, receiptHandle);
@@ -618,28 +576,22 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <code>&Attribute.2=that</code>
 	 * </p>
 	 *
-	 * @param sendMessageBatchRequest
-	 *            Container for the necessary parameters to execute the
-	 *            SendMessageBatch service method on AmazonSQS.
-	 *
+	 * @param sendMessageBatchRequest Container for the necessary parameters to execute the
+	 *                                SendMessageBatch service method on AmazonSQS.
 	 * @return The response from the SendMessageBatch service method, as
-	 *         returned by AmazonSQS.
-	 *
+	 * returned by AmazonSQS.
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
 	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException                 If any internal errors are encountered inside the client
+	 *                                               while attempting to make the request or handle the response.
+	 *                                               For example if a network connection is not available.
+	 * @throws AmazonServiceException                If an error response is returned by AmazonSQS indicating
+	 *                                               either a problem with the data in the request, or a server
+	 *                                               side issue.
 	 */
 	public SendMessageBatchResult sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest) {
 
@@ -704,29 +656,22 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <code>&Attribute.2=that</code>
 	 * </p>
 	 *
-	 * @param queueUrl
-	 *            The URL of the Amazon SQS queue to take action on.
-	 * @param entries
-	 *            A list of <a>SendMessageBatchRequestEntry</a> items.
-	 *
+	 * @param queueUrl The URL of the Amazon SQS queue to take action on.
+	 * @param entries  A list of <a>SendMessageBatchRequestEntry</a> items.
 	 * @return The response from the SendMessageBatch service method, as
-	 *         returned by AmazonSQS.
-	 *
+	 * returned by AmazonSQS.
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
 	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException                 If any internal errors are encountered inside the client
+	 *                                               while attempting to make the request or handle the response.
+	 *                                               For example if a network connection is not available.
+	 * @throws AmazonServiceException                If an error response is returned by AmazonSQS indicating
+	 *                                               either a problem with the data in the request, or a server
+	 *                                               side issue.
 	 */
 	public SendMessageBatchResult sendMessageBatch(String queueUrl, List<SendMessageBatchRequestEntry> entries) {
 		SendMessageBatchRequest sendMessageBatchRequest = new SendMessageBatchRequest(queueUrl, entries);
@@ -757,26 +702,20 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <code>&Attribute.2=that</code>
 	 * </p>
 	 *
-	 * @param deleteMessageBatchRequest
-	 *            Container for the necessary parameters to execute the
-	 *            DeleteMessageBatch service method on AmazonSQS.
-	 *
+	 * @param deleteMessageBatchRequest Container for the necessary parameters to execute the
+	 *                                  DeleteMessageBatch service method on AmazonSQS.
 	 * @return The response from the DeleteMessageBatch service method, as
-	 *         returned by AmazonSQS.
-	 *
+	 * returned by AmazonSQS.
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException                 If any internal errors are encountered inside the client
+	 *                                               while attempting to make the request or handle the response.
+	 *                                               For example if a network connection is not available.
+	 * @throws AmazonServiceException                If an error response is returned by AmazonSQS indicating
+	 *                                               either a problem with the data in the request, or a server
+	 *                                               side issue.
 	 */
 	public DeleteMessageBatchResult deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest) {
 
@@ -786,8 +725,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(
-				SQSExtendedClientConstants.USER_AGENT_HEADER);
+		deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
 		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
 			return super.deleteMessageBatch(deleteMessageBatchRequest);
@@ -829,70 +767,57 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <code>&Attribute.2=that</code>
 	 * </p>
 	 *
-	 * @param queueUrl
-	 *            The URL of the Amazon SQS queue to take action on.
-	 * @param entries
-	 *            A list of receipt handles for the messages to be deleted.
-	 *
+	 * @param queueUrl The URL of the Amazon SQS queue to take action on.
+	 * @param entries  A list of receipt handles for the messages to be deleted.
 	 * @return The response from the DeleteMessageBatch service method, as
-	 *         returned by AmazonSQS.
-	 *
+	 * returned by AmazonSQS.
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
-	 *
-	 * @throws AmazonClientException
-	 *             If any internal errors are encountered inside the client
-	 *             while attempting to make the request or handle the response.
-	 *             For example if a network connection is not available.
-	 * @throws AmazonServiceException
-	 *             If an error response is returned by AmazonSQS indicating
-	 *             either a problem with the data in the request, or a server
-	 *             side issue.
+	 * @throws AmazonClientException                 If any internal errors are encountered inside the client
+	 *                                               while attempting to make the request or handle the response.
+	 *                                               For example if a network connection is not available.
+	 * @throws AmazonServiceException                If an error response is returned by AmazonSQS indicating
+	 *                                               either a problem with the data in the request, or a server
+	 *                                               side issue.
 	 */
 	public DeleteMessageBatchResult deleteMessageBatch(String queueUrl, List<DeleteMessageBatchRequestEntry> entries) {
 		DeleteMessageBatchRequest deleteMessageBatchRequest = new DeleteMessageBatchRequest(queueUrl, entries);
 		return deleteMessageBatch(deleteMessageBatchRequest);
 	}
 
-    /**
-     * <p>
-     * Deletes the messages in a queue specified by the <b>queue URL</b> .
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
-     * the queue cannot be retrieved.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> This does not delete the message payloads from Amazon S3.
-     * </p>
-     * <p>
-     * When you purge a queue, the message deletion process takes up to 60
-     * seconds. All messages sent to the queue before calling
-     * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
-     * it is being purged may be deleted. While the queue is being purged,
-     * messages sent to the queue before <code>PurgeQueue</code> was called may
-     * be received, but will be deleted within the next minute.
-     * </p>
-     *
-     * @param purgeQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            PurgeQueue service method on AmazonSQS.
-     *
-     *
-     * @throws PurgeQueueInProgressException
-     * @throws QueueDoesNotExistException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
+	/**
+	 * <p>
+	 * Deletes the messages in a queue specified by the <b>queue URL</b> .
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
+	 * the queue cannot be retrieved.
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b> This does not delete the message payloads from Amazon S3.
+	 * </p>
+	 * <p>
+	 * When you purge a queue, the message deletion process takes up to 60
+	 * seconds. All messages sent to the queue before calling
+	 * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
+	 * it is being purged may be deleted. While the queue is being purged,
+	 * messages sent to the queue before <code>PurgeQueue</code> was called may
+	 * be received, but will be deleted within the next minute.
+	 * </p>
+	 *
+	 * @param purgeQueueRequest Container for the necessary parameters to execute the
+	 *                          PurgeQueue service method on AmazonSQS.
+	 * @throws PurgeQueueInProgressException
+	 * @throws QueueDoesNotExistException
+	 * @throws AmazonClientException         If any internal errors are encountered inside the client
+	 *                                       while attempting to make the request or handle the response.
+	 *                                       For example if a network connection is not available.
+	 * @throws AmazonServiceException        If an error response is returned by AmazonSQS indicating
+	 *                                       either a problem with the data in the request, or a server
+	 *                                       side issue.
+	 */
 	public void purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
 		LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
 
@@ -908,8 +833,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	}
 
 	private void deleteMessagePayloadFromS3(String receiptHandle) {
-		String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle,
-				SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
+		String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
 		String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
 		try {
 			clientConfiguration.getAmazonS3Client().deleteObject(new DeleteObjectRequest(s3MsgBucketName, s3MsgKey));
@@ -928,9 +852,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	private void checkMessageAttributes(Map<String, MessageAttributeValue> messageAttributes) {
 		int msgAttributesSize = getMsgAttributesSize(messageAttributes);
 		if (msgAttributesSize > clientConfiguration.getMessageSizeThreshold()) {
-			String errorMessage = "Total size of Message attributes is " + msgAttributesSize
-					+ " bytes which is larger than the threshold of " + clientConfiguration.getMessageSizeThreshold()
-					+ " Bytes. Consider including the payload in the message body instead of message attributes.";
+			String errorMessage =
+							"Total size of Message attributes is " + msgAttributesSize + " bytes which is larger than the threshold of "
+							+ clientConfiguration.getMessageSizeThreshold()
+							+ " Bytes. Consider including the payload in the message body instead of message attributes.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
@@ -938,17 +863,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		int messageAttributesNum = messageAttributes.size();
 		if (messageAttributesNum > SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES) {
 			String errorMessage = "Number of message attributes [" + messageAttributesNum
-					+ "] exceeds the maximum allowed for large-payload messages ["
-					+ SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES + "].";
+														+ "] exceeds the maximum allowed for large-payload messages ["
+														+ SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES + "].";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
 
-		MessageAttributeValue largePayloadAttributeValue = messageAttributes
-				.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+		MessageAttributeValue largePayloadAttributeValue = messageAttributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
 		if (largePayloadAttributeValue != null) {
 			String errorMessage = "Message attribute name " + SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME
-					+ " is reserved for use by SQS extended client.";
+														+ " is reserved for use by SQS extended client.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
@@ -956,9 +880,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	}
 
 	private String embedS3PointerInReceiptHandle(String receiptHandle, String s3MsgBucketName, String s3MsgKey) {
-		String modifiedReceiptHandle = SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
-				+ SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
-				+ s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
+		String modifiedReceiptHandle =
+						SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName + SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER
+						+ SQSExtendedClientConstants.S3_KEY_MARKER + s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
 		return modifiedReceiptHandle;
 	}
 
@@ -978,7 +902,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 	private String getOrigReceiptHandle(String receiptHandle) {
 		int secondOccurence = receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER,
-				receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER) + 1);
+																								receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER) + 1);
 		return receiptHandle.substring(secondOccurence + SQSExtendedClientConstants.S3_KEY_MARKER.length());
 	}
 
@@ -989,8 +913,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	}
 
 	private boolean isS3ReceiptHandle(String receiptHandle) {
-		return receiptHandle.contains(SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER)
-				&& receiptHandle.contains(SQSExtendedClientConstants.S3_KEY_MARKER);
+		return receiptHandle.contains(SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER) && receiptHandle.contains(
+						SQSExtendedClientConstants.S3_KEY_MARKER);
 	}
 
 	private String getTextFromS3(String s3BucketName, String s3Key) {
@@ -1080,8 +1004,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		// Store the message content in S3.
 		storeTextInS3(s3Key, messageContentStr, messageContentSize);
 
-		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key
-				+ ".");
+		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key + ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
 		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
@@ -1108,13 +1031,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		MessageAttributeValue messageAttributeValue = new MessageAttributeValue();
 		messageAttributeValue.setDataType("Number");
 		messageAttributeValue.setStringValue(messageContentSize.toString());
-		sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
-				messageAttributeValue);
+		sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
 
 		// Store the message content in S3.
 		storeTextInS3(s3Key, messageContentStr, messageContentSize);
-		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key
-				+ ".");
+		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key + ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
 		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
@@ -1144,8 +1065,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		InputStream messageContentStream = new ByteArrayInputStream(messageContentStr.getBytes(StandardCharsets.UTF_8));
 		ObjectMetadata messageContentStreamMetadata = new ObjectMetadata();
 		messageContentStreamMetadata.setContentLength(messageContentSize);
-		PutObjectRequest putObjectRequest = new PutObjectRequest(clientConfiguration.getS3BucketName(), s3Key,
-				messageContentStream, messageContentStreamMetadata);
+		PutObjectRequest putObjectRequest = new PutObjectRequest(clientConfiguration.getS3BucketName(),
+																														 s3Key,
+																														 messageContentStream,
+																														 messageContentStreamMetadata);
 		try {
 			clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
 		} catch (AmazonServiceException e) {
@@ -1178,7 +1101,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(String queueUrl,
 																																				 List<ChangeMessageVisibilityBatchRequestEntry> entries)
 					throws AmazonServiceException {
-		return super.changeMessageVisibilityBatch(queueUrl, removeEmbedS3PointerFromVisibilityBatchEntries(entries));
+		return changeMessageVisibilityBatch(new ChangeMessageVisibilityBatchRequest(queueUrl, entries));
 	}
 
 	@Override
@@ -1192,7 +1115,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 	private List<ChangeMessageVisibilityBatchRequestEntry> removeEmbedS3PointerFromVisibilityBatchEntries(
 					List<ChangeMessageVisibilityBatchRequestEntry> entries) {
-		List<ChangeMessageVisibilityBatchRequestEntry> withOrigReceiptHandles = new ArrayList<>();
+		List<ChangeMessageVisibilityBatchRequestEntry> withOrigReceiptHandles = new ArrayList<ChangeMessageVisibilityBatchRequestEntry>();
 		for (ChangeMessageVisibilityBatchRequestEntry entry : entries) {
 			if (isS3ReceiptHandle(entry.getReceiptHandle())) {
 				withOrigReceiptHandles.add(new ChangeMessageVisibilityBatchRequestEntry(entry.getId(),
@@ -1207,9 +1130,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	@Override
 	public void changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
 					throws AmazonServiceException {
-		super.changeMessageVisibility(queueUrl,
-																	isS3ReceiptHandle(receiptHandle) ? getOrigReceiptHandle(receiptHandle) : receiptHandle,
-																	visibilityTimeout);
+		changeMessageVisibility(new ChangeMessageVisibilityRequest(queueUrl, receiptHandle, visibilityTimeout));
 	}
 
 	@Override
