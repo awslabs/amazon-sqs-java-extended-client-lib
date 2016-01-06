@@ -22,6 +22,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,29 +35,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.services.sqs.model.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -139,10 +118,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param sendMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            SendMessage service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the SendMessage service method, as returned by
 	 *         AmazonSQS.
-	 * 
+	 *
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
 	 *
@@ -193,16 +172,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * characters not included in the list, your request will be rejected. #x9 |
 	 * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param messageBody
 	 *            The message to send. For a list of allowed characters, see the
 	 *            preceding important note.
-	 * 
+	 *
 	 * @return The response from the SendMessage service method, as returned by
 	 *         AmazonSQS.
-	 * 
+	 *
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
 	 *
@@ -244,7 +223,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 * 
+	 *
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -278,7 +257,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 * 
+	 *
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -305,10 +284,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param receiveMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            ReceiveMessage service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the ReceiveMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws OverLimitException
 	 *
 	 * @throws AmazonClientException
@@ -396,7 +375,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 * 
+	 *
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -430,7 +409,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 * 
+	 *
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -453,13 +432,13 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * writing code that calls this action, we recommend that you structure your
 	 * code so that it can handle new attributes gracefully.
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
-	 * 
+	 *
 	 * @return The response from the ReceiveMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws OverLimitException
 	 *
 	 * @throws AmazonClientException
@@ -508,8 +487,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param deleteMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            DeleteMessage service method on AmazonSQS.
-	 * 
-	 * 
+	 *
+	 *
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
 	 *
@@ -575,15 +554,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * system to be idempotent so that receiving a particular message more than
 	 * once is not a problem.
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param receiptHandle
 	 *            The receipt handle associated with the message to delete.
-	 * 
+	 *
 	 * @return The response from the DeleteMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
 	 *
@@ -641,10 +620,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param sendMessageBatchRequest
 	 *            Container for the necessary parameters to execute the
 	 *            SendMessageBatch service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the SendMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
@@ -723,15 +702,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * <code>&Attribute.2=that</code>
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param entries
 	 *            A list of <a>SendMessageBatchRequestEntry</a> items.
-	 * 
+	 *
 	 * @return The response from the SendMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
@@ -780,10 +759,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param deleteMessageBatchRequest
 	 *            Container for the necessary parameters to execute the
 	 *            DeleteMessageBatch service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the DeleteMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
@@ -848,15 +827,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * <code>&Attribute.2=that</code>
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param entries
 	 *            A list of receipt handles for the messages to be deleted.
-	 * 
+	 *
 	 * @return The response from the DeleteMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
@@ -1194,4 +1173,52 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return counterOutputStream.getTotalSize();
 	}
 
+	@Override
+	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(String queueUrl,
+																																				 List<ChangeMessageVisibilityBatchRequestEntry> entries)
+					throws AmazonServiceException {
+		return super.changeMessageVisibilityBatch(queueUrl, removeEmbedS3PointerFromVisibilityBatchEntries(entries));
+	}
+
+	@Override
+	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+					ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException {
+		changeMessageVisibilityBatchRequest = new ChangeMessageVisibilityBatchRequest(changeMessageVisibilityBatchRequest.getQueueUrl(),
+																																									removeEmbedS3PointerFromVisibilityBatchEntries(
+																																													changeMessageVisibilityBatchRequest.getEntries()));
+		return super.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
+	}
+
+	private List<ChangeMessageVisibilityBatchRequestEntry> removeEmbedS3PointerFromVisibilityBatchEntries(
+					List<ChangeMessageVisibilityBatchRequestEntry> entries) {
+		List<ChangeMessageVisibilityBatchRequestEntry> withOrigReceiptHandles = new ArrayList<>();
+		for (ChangeMessageVisibilityBatchRequestEntry entry : entries) {
+			if (isS3ReceiptHandle(entry.getReceiptHandle())) {
+				withOrigReceiptHandles.add(new ChangeMessageVisibilityBatchRequestEntry(entry.getId(),
+																																								getOrigReceiptHandle(entry.getReceiptHandle())));
+			} else {
+				withOrigReceiptHandles.add(entry);
+			}
+		}
+		return withOrigReceiptHandles;
+	}
+
+	@Override
+	public void changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
+					throws AmazonServiceException {
+		super.changeMessageVisibility(queueUrl,
+																	isS3ReceiptHandle(receiptHandle) ? getOrigReceiptHandle(receiptHandle) : receiptHandle,
+																	visibilityTimeout);
+	}
+
+	@Override
+	public void changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+					throws AmazonServiceException {
+		if (isS3ReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle())) {
+			changeMessageVisibilityRequest = new ChangeMessageVisibilityRequest(changeMessageVisibilityRequest.getQueueUrl(),
+																																					getOrigReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle()),
+																																					changeMessageVisibilityRequest.getVisibilityTimeout());
+		}
+		super.changeMessageVisibility(changeMessageVisibilityRequest);
+	}
 }
