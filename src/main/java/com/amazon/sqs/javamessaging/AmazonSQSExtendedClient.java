@@ -34,10 +34,13 @@ import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.*;
 
+import com.amazonaws.util.Base16;
+import com.amazonaws.util.Base64;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -324,6 +327,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				String modifiedReceiptHandle = embedS3PointerInReceiptHandle(message.getReceiptHandle(), s3MsgBucketName, s3MsgKey);
 
 				message.setReceiptHandle(modifiedReceiptHandle);
+				// s3 uses base64 strings, sqs uses hex (base(16) lower case). convert
+				message.setMD5OfBody(Base16.encodeAsString(Base64.decode(s3Pointer.getTargetMd5())).toLowerCase());
 			}
 		}
 		return receiveMessageResult;
@@ -1002,12 +1007,12 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		batchEntry.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
 
 		// Store the message content in S3.
-		storeTextInS3(s3Key, messageContentStr, messageContentSize);
+		PutObjectResult putResult = storeTextInS3(s3Key, messageContentStr, messageContentSize);
 
 		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key + ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
+		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key, putResult.getContentMd5());
 		String s3PointerStr = getJSONFromS3Pointer(s3Pointer);
 
 		// Storing S3 pointer in the message body.
@@ -1034,11 +1039,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
 
 		// Store the message content in S3.
-		storeTextInS3(s3Key, messageContentStr, messageContentSize);
+		PutObjectResult putResult = storeTextInS3(s3Key, messageContentStr, messageContentSize);
 		LOG.info("S3 object created, Bucket name: " + clientConfiguration.getS3BucketName() + ", Object key: " + s3Key + ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
+		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key, putResult.getContentMd5());
 
 		String s3PointerStr = getJSONFromS3Pointer(s3Pointer);
 
@@ -1061,7 +1066,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return s3PointerStr;
 	}
 
-	private void storeTextInS3(String s3Key, String messageContentStr, Long messageContentSize) {
+	private PutObjectResult storeTextInS3(String s3Key, String messageContentStr, Long messageContentSize) {
 		InputStream messageContentStream = new ByteArrayInputStream(messageContentStr.getBytes(StandardCharsets.UTF_8));
 		ObjectMetadata messageContentStreamMetadata = new ObjectMetadata();
 		messageContentStreamMetadata.setContentLength(messageContentSize);
@@ -1070,7 +1075,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 																														 messageContentStream,
 																														 messageContentStreamMetadata);
 		try {
-			clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
+			return clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
 		} catch (AmazonServiceException e) {
 			String errorMessage = "Failed to store the message content in an S3 object. SQS message was not sent.";
 			LOG.error(errorMessage, e);

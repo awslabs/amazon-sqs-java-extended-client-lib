@@ -23,11 +23,14 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.*;
 
+import com.amazonaws.util.Base64;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -70,7 +73,7 @@ public class AmazonSQSExtendedClientTest {
 	@Before
 	public void setupClient() {
 		s3 = mock(AmazonS3.class);
-		when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
+		when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(new PutObjectResult());
 
 		ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration().withLargePayloadSupportEnabled(s3,
 																																																															 S3_BUCKET_NAME);
@@ -176,7 +179,8 @@ public class AmazonSQSExtendedClientTest {
 
 		Message message = new Message();
 		message.withBody("[\"com.amazon.sqs.javamessaging.MessageS3Pointer\"," + "{\"s3BucketName\":\"test-bucket-name\","
-										 + "\"s3Key\":\"7f096cb3-454d-4bd8-923d-8948a300f1c1\"}]");
+										 + "\"s3Key\":\"7f096cb3-454d-4bd8-923d-8948a300f1c1\",\"md5\":\"" +
+										 Base64.encodeAsString(DigestUtils.md5(messageBody)) + "\"}]");
 		message.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
 																			new MessageAttributeValue().withDataType("Number")
 																																 .withStringValue(Integer.toString(messageBody.getBytes(
@@ -212,14 +216,8 @@ public class AmazonSQSExtendedClientTest {
 
 	@Test
 	public void testDeleteLargeMessage() {
-		String messageHandle = "MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+Cw\n"
-													 + "Lj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QE\n"
-													 + "auMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=";
-		String largeMessageHandle =
-						"-..s3BucketName..-test-bucket-name-..s3BucketName..--..s3Key..-7f096cb3-454d-4bd8-923d-8948a300f1c1-..s3Key..-"
-						+ messageHandle;
 
-		sqs.deleteMessage(SQS_QUEUE_URL, largeMessageHandle);
+		sqs.deleteMessage(SQS_QUEUE_URL, LARGE_MESSAGE_HANDLE);
 		// aws request objects lack equals methods for matcher verification
 		ArgumentCaptor<DeleteObjectRequest> deleteObjectArgument = ArgumentCaptor.forClass(DeleteObjectRequest.class);
 		ArgumentCaptor<DeleteMessageRequest> deleteMessageArgument = ArgumentCaptor.forClass(DeleteMessageRequest.class);
@@ -228,38 +226,27 @@ public class AmazonSQSExtendedClientTest {
 		Assert.assertEquals("7f096cb3-454d-4bd8-923d-8948a300f1c1",
 												deleteObjectArgument.getValue().getKey(),
 												"7f096cb3-454d-4bd8-923d-8948a300f1c1");
-		Assert.assertEquals(messageHandle, deleteMessageArgument.getValue().getReceiptHandle());
+		Assert.assertEquals(MESSAGE_HANDLE, deleteMessageArgument.getValue().getReceiptHandle());
 	}
 
 	@Test
 	public void testDeleteSmallMessage() {
-		String messageHandle = "MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+Cw\n"
-													 + "Lj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QE\n"
-													 + "auMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=";
-
-		sqs.deleteMessage(SQS_QUEUE_URL, messageHandle);
+		sqs.deleteMessage(SQS_QUEUE_URL, MESSAGE_HANDLE);
 		// aws request objects lack equals methods for matcher verification
 		ArgumentCaptor<DeleteMessageRequest> deleteMessageArgument = ArgumentCaptor.forClass(DeleteMessageRequest.class);
 		verify(s3, never()).deleteObject(isA(DeleteObjectRequest.class));
 		verify(wrappedSQS, times(1)).deleteMessage(deleteMessageArgument.capture());
-		Assert.assertEquals(messageHandle, deleteMessageArgument.getValue().getReceiptHandle());
+		Assert.assertEquals(MESSAGE_HANDLE, deleteMessageArgument.getValue().getReceiptHandle());
 	}
 
 	@Test
 	public void testChangeMessageVisibilityLargeMessage() {
-		String messageHandle = "MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+Cw\n"
-													 + "Lj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QE\n"
-													 + "auMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=";
-		String largeMessageHandle =
-						"-..s3BucketName..-test-bucket-name-..s3BucketName..--..s3Key..-7f096cb3-454d-4bd8-923d-8948a300f1c1-..s3Key..-"
-						+ messageHandle;
-
-		sqs.changeMessageVisibility(SQS_QUEUE_URL, largeMessageHandle, 10);
+		sqs.changeMessageVisibility(SQS_QUEUE_URL, LARGE_MESSAGE_HANDLE, 10);
 		// aws request objects lack equals methods for matcher verification
 		ArgumentCaptor<ChangeMessageVisibilityRequest> changeVisibilityArgument = ArgumentCaptor.forClass(
 						ChangeMessageVisibilityRequest.class);
 		verify((wrappedSQS), times(1)).changeMessageVisibility(changeVisibilityArgument.capture());
-		Assert.assertEquals(messageHandle, changeVisibilityArgument.getValue().getReceiptHandle());
+		Assert.assertEquals(MESSAGE_HANDLE, changeVisibilityArgument.getValue().getReceiptHandle());
 	}
 
 	@Test

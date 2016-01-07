@@ -24,13 +24,15 @@ package com.amazon.sqs.javamessaging;
 class MessageS3Pointer {
 	private String s3BucketName;
 	private String s3Key;
+	private String targetMd5;
 
 	public MessageS3Pointer() {
 	}
 
-	public MessageS3Pointer(String s3BucketName, String s3Key) {
+	public MessageS3Pointer(String s3BucketName, String s3Key, String targetMd5) {
 		this.s3BucketName = s3BucketName;
 		this.s3Key = s3Key;
+		this.targetMd5 = targetMd5;
 	}
 
 	public String getS3BucketName() {
@@ -49,4 +51,11 @@ class MessageS3Pointer {
 		this.s3Key = s3Key;
 	}
 
+	public String getTargetMd5() {
+		return targetMd5;
+	}
+
+	public void setTargetMd5(String targetMd5) {
+		this.targetMd5 = targetMd5;
+	}
 }
