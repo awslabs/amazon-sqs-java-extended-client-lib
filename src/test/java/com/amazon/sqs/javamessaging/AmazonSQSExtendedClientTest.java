@@ -191,7 +191,7 @@ public class AmazonSQSExtendedClientTest {
 
 		Message message = new Message();
 		message.withBody("[\"com.amazon.sqs.javamessaging.MessageS3Pointer\"," + "{\"s3BucketName\":\"test-bucket-name\","
-										 + "\"s3Key\":\"7f096cb3-454d-4bd8-923d-8948a300f1c1\",\"md5\":\"" +
+										 + "\"s3Key\":\"7f096cb3-454d-4bd8-923d-8948a300f1c1\",\"targetMd5\":\"" +
 										 Base64.encodeAsString(DigestUtils.md5(messageBody)) + "\"}]");
 		message.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
 																			new MessageAttributeValue().withDataType("Number")
