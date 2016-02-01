@@ -17,9 +17,14 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.UUID;
+
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.*;
 
@@ -42,12 +47,19 @@ public class ExtendedClientConfigurationTest {
         when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
         boolean alwaysThroughS3 = true;
+        boolean retainS3Messages = true;
         int messageSizeThreshold = 500;
 
         ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
 
+        S3KeyGenerator s3KeyGenerator = new S3KeyGenerator() {
+            public String generateObjectKey(SendMessageRequest sendMessageRequest) { return UUID.randomUUID().toString();}
+            public String generateObjectKey(SendMessageBatchRequestEntry batchEntry) { return UUID.randomUUID().toString();}
+        };
+
         extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName)
-                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
+                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold)
+                .withRetainS3Messages(retainS3Messages).withS3KeyGenerator(s3KeyGenerator);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
@@ -55,7 +67,9 @@ public class ExtendedClientConfigurationTest {
         Assert.assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
         Assert.assertTrue(newExtendedClientConfig.isLargePayloadSupportEnabled());
         Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
+        Assert.assertEquals(retainS3Messages, newExtendedClientConfig.isRetainS3Messages());
         Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getMessageSizeThreshold());
+        Assert.assertEquals(s3KeyGenerator, newExtendedClientConfig.getS3KeyGenerator());
 
         Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }

@@ -17,11 +17,14 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.annotation.NotThreadSafe;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
@@ -35,7 +38,12 @@ public class ExtendedClientConfiguration {
 	private String s3BucketName;
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
+	private boolean retainS3Messages = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
+	private S3KeyGenerator s3KeyGenerator = new S3KeyGenerator() {
+		public String generateObjectKey(SendMessageRequest sendMessageRequest) { return UUID.randomUUID().toString();}
+		public String generateObjectKey(SendMessageBatchRequestEntry batchEntry) { return UUID.randomUUID().toString();}
+	};
 
 	public ExtendedClientConfiguration() {
 		s3 = null;
@@ -47,7 +55,9 @@ public class ExtendedClientConfiguration {
 		this.s3BucketName = other.s3BucketName;
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
+		this.retainS3Messages = other.retainS3Messages;
 		this.messageSizeThreshold = other.messageSizeThreshold;
+		this.s3KeyGenerator = other.s3KeyGenerator;
 	}
 
 	/**
@@ -213,5 +223,73 @@ public class ExtendedClientConfiguration {
 	 */
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
+	}
+
+	/**
+	 * Sets whether or not messages are deleted in S3 when they are delete from
+	 * the queue.
+	 *
+	 * @param retainS3Messages
+	 *            Whether or not messages are deleted in S3 when they are delete
+	 *            from the queue. Default: false
+	 */
+	public void setRetainS3Messages(boolean retainS3Messages) {
+		this.retainS3Messages = retainS3Messages;
+	}
+
+	/**
+	 * Sets whether or not messages are deleted in S3 when they are delete from
+	 * the queue.
+	 *
+	 * @param retainS3Messages
+	 *            Whether or not messages are deleted in S3 when they are delete
+	 *            from the queue. Default: false
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withRetainS3Messages(boolean retainS3Messages) {
+		setRetainS3Messages(retainS3Messages);
+		return this;
+	}
+
+	/**
+	 * Checks whether or not messages are deleted in S3 when they are delete from
+	 * the queue.
+	 *
+	 * @return True if messages are delete when they are deleted from the queue.
+	 *         Default: false
+	 */
+	public boolean isRetainS3Messages() {
+		return retainS3Messages;
+	}
+
+	/**
+	 * Get the S3KeyGenerator used to generate the S3 object keys for new messages.
+	 *
+	 * @return the S3KeyGenerator used to generate the S3 object keys for new messages.
+     */
+	public S3KeyGenerator getS3KeyGenerator() {
+		return s3KeyGenerator;
+	}
+
+	/**
+	 * Set the S3KeyGenerator used to generate the S3 object keys for new messages.
+	 *
+	 * @param s3KeyGenerator the S3KeyGenerator used to generate the S3 object keys for
+	 *  			new messages.
+     */
+	public void setS3KeyGenerator(S3KeyGenerator s3KeyGenerator) {
+		this.s3KeyGenerator = s3KeyGenerator;
+	}
+
+	/**
+	 * Set the S3KeyGenerator used to generate the S3 object keys for new messages.
+	 *
+	 * @param s3KeyGenerator the S3KeyGenerator used to generate the S3 object keys for
+	 *  			new messages.
+	 * @return the updated ExtendedClientConfiguration object.
+     */
+	public ExtendedClientConfiguration withS3KeyGenerator(S3KeyGenerator s3KeyGenerator) {
+		setS3KeyGenerator(s3KeyGenerator);
+		return this;
 	}
 }
