@@ -6,7 +6,7 @@
 
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>Amazon SQS Extended Client Library for Java</name>
   <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon S3.
@@ -37,7 +37,7 @@
   </developers>
 
   <properties>
-    <aws-java-sdk.version>1.10.27</aws-java-sdk.version>
+    <aws-java-sdk.version>1.11.63</aws-java-sdk.version>
   </properties>
 
   <dependencies>
