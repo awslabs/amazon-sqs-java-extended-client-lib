@@ -15,6 +15,14 @@
 
 package com.amazon.sqs.javamessaging;
 
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.*;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,40 +32,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Map.Entry;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
-
+import java.util.UUID;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -144,7 +120,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *         AmazonSQS.
 	 * 
 	 * @throws InvalidMessageContentsException
-	 * @throws UnsupportedOperationException
 	 *
 	 * @throws AmazonClientException
 	 *             If any internal errors are encountered inside the client
@@ -204,7 +179,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *         AmazonSQS.
 	 * 
 	 * @throws InvalidMessageContentsException
-	 * @throws UnsupportedOperationException
 	 *
 	 * @throws AmazonClientException
 	 *             If any internal errors are encountered inside the client
@@ -522,7 +496,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+	public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
 
 		if (deleteMessageRequest == null) {
 			String errorMessage = "deleteMessageRequest cannot be null.";
@@ -533,8 +507,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		deleteMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
 		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
-			super.deleteMessage(deleteMessageRequest);
-			return;
+			return super.deleteMessage(deleteMessageRequest);
 		}
 
 		String receiptHandle = deleteMessageRequest.getReceiptHandle();
@@ -544,7 +517,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			origReceiptHandle = getOrigReceiptHandle(receiptHandle);
 		}
 		deleteMessageRequest.setReceiptHandle(origReceiptHandle);
-		super.deleteMessage(deleteMessageRequest);
+		return super.deleteMessage(deleteMessageRequest);
 	}
 
 	/**
@@ -596,9 +569,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteMessage(String queueUrl, String receiptHandle) {
+	public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle) {
 		DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest(queueUrl, receiptHandle);
-		deleteMessage(deleteMessageRequest);
+		return deleteMessage(deleteMessageRequest);
 	}
 
 	/**
@@ -648,7 +621,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
-	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
 	 *
@@ -735,7 +707,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
-	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
 	 *
@@ -913,7 +884,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *             either a problem with the data in the request, or a server
      *             side issue.
      */
-	public void purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
+	public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
 		LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
 
 		if (purgeQueueRequest == null) {
@@ -924,7 +895,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		purgeQueueRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		super.purgeQueue(purgeQueueRequest);
+		return super.purgeQueue(purgeQueueRequest);
 	}
 
 	private void deleteMessagePayloadFromS3(String receiptHandle) {

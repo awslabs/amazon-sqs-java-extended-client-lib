@@ -15,60 +15,15 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.util.List;
-import java.util.Map;
-
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ResponseMetadata;
 import com.amazonaws.regions.Region;
 import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.AddPermissionRequest;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.CreateQueueResult;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.GetQueueUrlRequest;
-import com.amazonaws.services.sqs.model.GetQueueUrlResult;
-import com.amazonaws.services.sqs.model.InvalidAttributeNameException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesRequest;
-import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesResult;
-import com.amazonaws.services.sqs.model.ListQueuesRequest;
-import com.amazonaws.services.sqs.model.ListQueuesResult;
-import com.amazonaws.services.sqs.model.MessageNotInflightException;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueInProgressException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.QueueDeletedRecentlyException;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.QueueNameExistsException;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.RemovePermissionRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.services.sqs.model.*;
+import java.util.List;
+import java.util.Map;
 
 abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	AmazonSQS amazonSqsToBeExtended;
@@ -101,7 +56,6 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
      *         by AmazonSQS.
      * 
      * @throws InvalidMessageContentsException
-     * @throws UnsupportedOperationException
      *
      * @throws AmazonClientException
      *             If any internal errors are encountered inside the client while
@@ -251,8 +205,8 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
      *             If an error response is returned by AmazonSQS indicating
      *             either a problem with the data in the request, or a server side issue.
      */
-	public void deleteMessage(DeleteMessageRequest deleteMessageRequest) {
-		amazonSqsToBeExtended.deleteMessage(deleteMessageRequest);
+	public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+		return amazonSqsToBeExtended.deleteMessage(deleteMessageRequest);
 	}
 
 	/**
@@ -281,7 +235,6 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *         AmazonSQS.
 	 * 
 	 * @throws InvalidMessageContentsException
-	 * @throws UnsupportedOperationException
 	 *
 	 * @throws AmazonClientException
 	 *             If any internal errors are encountered inside the client
@@ -449,10 +402,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteMessage(String queueUrl, String receiptHandle) throws AmazonServiceException,
+	public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle) throws AmazonServiceException,
 			AmazonClientException {
 
-		amazonSqsToBeExtended.deleteMessage(queueUrl, receiptHandle);
+		return amazonSqsToBeExtended.deleteMessage(queueUrl, receiptHandle);
 	}
 
 	/**
@@ -484,10 +437,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void setQueueAttributes(SetQueueAttributesRequest setQueueAttributesRequest) throws AmazonServiceException,
+	public SetQueueAttributesResult setQueueAttributes(SetQueueAttributesRequest setQueueAttributesRequest) throws AmazonServiceException,
 			AmazonClientException {
 
-		amazonSqsToBeExtended.setQueueAttributes(setQueueAttributesRequest);
+		return amazonSqsToBeExtended.setQueueAttributes(setQueueAttributesRequest);
 
 	}
 
@@ -605,10 +558,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+	public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
 			throws AmazonServiceException, AmazonClientException {
 
-		amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
+		return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
 	}
 
 	/**
@@ -672,10 +625,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void removePermission(RemovePermissionRequest removePermissionRequest) throws AmazonServiceException,
+	public RemovePermissionResult removePermission(RemovePermissionRequest removePermissionRequest) throws AmazonServiceException,
 			AmazonClientException {
 
-		amazonSqsToBeExtended.removePermission(removePermissionRequest);
+		return amazonSqsToBeExtended.removePermission(removePermissionRequest);
 	}
 
 	/**
@@ -818,7 +771,6 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
-	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
 	 *
@@ -871,9 +823,9 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
+	public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
 
-		amazonSqsToBeExtended.purgeQueue(purgeQueueRequest);
+		return amazonSqsToBeExtended.purgeQueue(purgeQueueRequest);
 
 	}
 
@@ -954,9 +906,9 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteQueue(DeleteQueueRequest deleteQueueRequest) throws AmazonServiceException, AmazonClientException {
+	public DeleteQueueResult deleteQueue(DeleteQueueRequest deleteQueueRequest) throws AmazonServiceException, AmazonClientException {
 
-		amazonSqsToBeExtended.deleteQueue(deleteQueueRequest);
+		return amazonSqsToBeExtended.deleteQueue(deleteQueueRequest);
 	}
 
 	/**
@@ -1152,10 +1104,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void addPermission(AddPermissionRequest addPermissionRequest) throws AmazonServiceException,
+	public AddPermissionResult addPermission(AddPermissionRequest addPermissionRequest) throws AmazonServiceException,
 			AmazonClientException {
 
-		amazonSqsToBeExtended.addPermission(addPermissionRequest);
+		return amazonSqsToBeExtended.addPermission(addPermissionRequest);
 	}
 
 	/**
@@ -1255,10 +1207,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void setQueueAttributes(String queueUrl, Map<String, String> attributes) throws AmazonServiceException,
+	public SetQueueAttributesResult setQueueAttributes(String queueUrl, Map<String, String> attributes) throws AmazonServiceException,
 			AmazonClientException {
 
-		amazonSqsToBeExtended.setQueueAttributes(queueUrl, attributes);
+		return amazonSqsToBeExtended.setQueueAttributes(queueUrl, attributes);
 	}
 
 	/**
@@ -1385,10 +1337,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
-			throws AmazonServiceException, AmazonClientException {
+	public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
+			throws AmazonClientException {
 
-		amazonSqsToBeExtended.changeMessageVisibility(queueUrl, receiptHandle, visibilityTimeout);
+		return amazonSqsToBeExtended.changeMessageVisibility(queueUrl, receiptHandle, visibilityTimeout);
 	}
 
 	/**
@@ -1456,9 +1408,9 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void removePermission(String queueUrl, String label) throws AmazonServiceException, AmazonClientException {
+	public RemovePermissionResult removePermission(String queueUrl, String label) throws AmazonServiceException, AmazonClientException {
 
-		amazonSqsToBeExtended.removePermission(queueUrl, label);
+		return amazonSqsToBeExtended.removePermission(queueUrl, label);
 	}
 
 	/**
@@ -1603,7 +1555,6 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
-	 * @throws UnsupportedOperationException
 	 * @throws InvalidBatchEntryIdException
 	 * @throws EmptyBatchRequestException
 	 *
@@ -1617,7 +1568,7 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             side issue.
 	 */
 	public SendMessageBatchResult sendMessageBatch(String queueUrl, List<SendMessageBatchRequestEntry> entries)
-			throws AmazonServiceException, AmazonClientException {
+			throws AmazonClientException {
 
 		return amazonSqsToBeExtended.sendMessageBatch(queueUrl, entries);
 	}
@@ -1664,9 +1615,9 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteQueue(String queueUrl) throws AmazonServiceException, AmazonClientException {
+	public DeleteQueueResult deleteQueue(String queueUrl) throws AmazonServiceException, AmazonClientException {
 
-		amazonSqsToBeExtended.deleteQueue(queueUrl);
+		return amazonSqsToBeExtended.deleteQueue(queueUrl);
 	}
 
 	/**
@@ -1895,10 +1846,10 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void addPermission(String queueUrl, String label, List<String> aWSAccountIds, List<String> actions)
-			throws AmazonServiceException, AmazonClientException {
+	public AddPermissionResult addPermission(String queueUrl, String label, List<String> aWSAccountIds, List<String> actions)
+			throws AmazonClientException {
 
-		amazonSqsToBeExtended.addPermission(queueUrl, label, aWSAccountIds, actions);
+		return amazonSqsToBeExtended.addPermission(queueUrl, label, aWSAccountIds, actions);
 	}
 
 	/**
