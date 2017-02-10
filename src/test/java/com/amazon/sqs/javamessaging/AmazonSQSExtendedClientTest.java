@@ -18,140 +18,196 @@ package com.amazon.sqs.javamessaging;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
+import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
+import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests the AmazonSQSExtendedClient class.
  */
 public class AmazonSQSExtendedClientTest {
 
-    private AmazonSQS sqs;
-    private AmazonS3 s3;
+    private AmazonSQS extendedSqsWithDefaultConfig;
+    private AmazonSQS mockSqsBackend;
+    private AmazonS3 mockS3;
     private static final String S3_BUCKET_NAME = "test-bucket-name";
     private static final String SQS_QUEUE_URL = "test-queue-url";
+
+    private static final int LESS_THAN_SQS_SIZE_LIMIT = 3;
     private static final int SQS_SIZE_LIMIT = 262144;
+    private static final int MORE_THAN_SQS_SIZE_LIMIT = SQS_SIZE_LIMIT + 1;
+
+    // should be > 1 and << SQS_SIZE_LIMIT
+    private static final int ARBITRATY_SMALLER_THRESSHOLD = 500;
 
     @Before
     public void setupClient() {
-        s3 = mock(AmazonS3.class);
-        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
+        mockS3 = mock(AmazonS3.class);
+        mockSqsBackend = mock(AmazonSQS.class);
+        when(mockS3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(s3, S3_BUCKET_NAME);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
 
-        sqs = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+        extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
 
     }
 
-	@Test
-	public void testSendLargeMessage() {
+    @Test
+    public void testWhenSendLargeMessageThenPayloadIsStoredInS3() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
 
-		int messageLength = SQS_SIZE_LIMIT + 1;
-		String messageBody = generateString(messageLength);
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
 
-		SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
-
-		sqs.sendMessage(messageRequest);
-		verify(s3, times(1)).putObject(isA(PutObjectRequest.class));
-	}
-
-	@Test
-	public void testSendSmallMessage() {
-		int messageLength = SQS_SIZE_LIMIT;
-		String messageBody = generateString(messageLength);
-
-		SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
-		sqs.sendMessage(messageRequest);
-		verify(s3, never()).putObject(isA(PutObjectRequest.class));
-	}
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+    }
 
     @Test
-    public void testSendMessageWithLargePayloadSupportDisabled() {
-        int messageLength = 300000;
-        String messageBody = generateString(messageLength);
+    public void testWhenSendSmallMessageThenS3IsNotUsed() {
+        int messageLength = SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
 
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
+
+        verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testWhenSendMessageWithLargePayloadSupportDisabledThenS3IsNotUsedAndSqsBackendIsResponsibleToFailIt() {
+        int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
                 .withLargePayloadSupportDisabled();
-
-        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
-        verify(s3, never()).putObject(isA(PutObjectRequest.class));
+
+        verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+        verify(mockSqsBackend).sendMessage(eq(messageRequest));
     }
 
     @Test
-    public void testSendMessageWithAlwaysThroughS3() {
-        int messageLength = 3;
-        String messageBody = generateString(messageLength);
-
+    public void testWhenSendMessageWithAlwaysThroughS3AndMessageIsSmallThenItIsStillStoredInS3() {
+        int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(s3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
-
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
-
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
-        verify(s3, times(1)).putObject(isA(PutObjectRequest.class));
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
     }
 
     @Test
-    public void testSendMessageWithSetMessageSizeThreshold() {
-        int messageLength = 1000;
-        String messageBody = generateString(messageLength);
-
+    public void testWhenSendMessageWithSetMessageSizeThresholdThenThresholdIsHonored() {
+        int messageLength = ARBITRATY_SMALLER_THRESSHOLD * 2;
+        String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(s3, S3_BUCKET_NAME).withMessageSizeThreshold(500);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
 
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
-        verify(s3, times(1)).putObject(isA(PutObjectRequest.class));
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
     }
 
-	@Test
-	public void testMessageBatch() {
+    @Test
+    public void testWhenMessageBatchIsSentThenOnlyMessagesLargerThanThresholdAreStoredInS3() {
+        // This creates 10 messages, out of which only two are below the threshold (100K and 200K),
+        // and the other 8 are above the threshold
 
-		List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<SendMessageBatchRequestEntry>();
+        int[] messageLengthForCounter = new int[] {
+                100_000,
+                300_000,
+                400_000,
+                500_000,
+                600_000,
+                700_000,
+                800_000,
+                900_000,
+                200_000,
+                1000_000
+        };
 
-		for (int i = 1; i <= 10; i++) {
-			SendMessageBatchRequestEntry entry = new SendMessageBatchRequestEntry();
-			int messageLength = i * 100000;
-			String messageBody = generateString(messageLength);
-			entry.setMessageBody(messageBody);
-			entry.setId("entry_" + i);
-			batchEntries.add(entry);
-		}
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<SendMessageBatchRequestEntry>();
+        for (int i = 0; i < 10; i++) {
+            SendMessageBatchRequestEntry entry = new SendMessageBatchRequestEntry();
+            int messageLength = messageLengthForCounter[i];
+            String messageBody = generateStringWithLength(messageLength);
+            entry.setMessageBody(messageBody);
+            entry.setId("entry_" + i);
+            batchEntries.add(entry);
+        }
 
-		SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
-        sqs.sendMessageBatch(batchRequest);
-		verify(s3, times(8)).putObject(isA(PutObjectRequest.class));
-	}
+        SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
+        extendedSqsWithDefaultConfig.sendMessageBatch(batchRequest);
 
-	private String generateString(int messageLength) {
-		char[] charArray = new char[messageLength];
-		Arrays.fill(charArray, 'x');
-		return new String(charArray);
-	}
+        // There should be 8 puts for the 8 messages above the threshhold
+        verify(mockS3, times(8)).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testWhenSmallMessageIsSentThenNoAttributeIsAdded() {
+        int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
+
+        ArgumentCaptor<SendMessageRequest> sendMessageRequestCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
+
+        Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().getMessageAttributes();
+        Assert.assertTrue(attributes.isEmpty());
+    }
+
+    @Test
+    public void testWhenLargeMessgaeIsSentThenAttributeWithPayloadSizeIsAdded() {
+        int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
+
+        ArgumentCaptor<SendMessageRequest> sendMessageRequestCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
+
+        Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().getMessageAttributes();
+        Assert.assertEquals("Number", attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getDataType());
+        Assert.assertEquals(messageLength, (int)Integer.valueOf(attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getStringValue()));
+    }
+
+    private String generateStringWithLength(int messageLength) {
+        char[] charArray = new char[messageLength];
+        Arrays.fill(charArray, 'x');
+        return new String(charArray);
+    }
 
 }
