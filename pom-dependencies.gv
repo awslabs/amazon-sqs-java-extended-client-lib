@@ -1,0 +1,23 @@
+digraph "com.amazonaws:amazon-sqs-java-extended-client-lib:jar:1.0.1.LAMPO" { 
+	"com.amazonaws:amazon-sqs-java-extended-client-lib:jar:1.0.1.LAMPO" -> "com.amazonaws:aws-java-sdk-sqs:jar:1.11.114:compile" ; 
+	"com.amazonaws:amazon-sqs-java-extended-client-lib:jar:1.0.1.LAMPO" -> "com.amazonaws:aws-java-sdk-s3:jar:1.11.114:compile" ; 
+	"com.amazonaws:amazon-sqs-java-extended-client-lib:jar:1.0.1.LAMPO" -> "junit:junit:jar:4.12:test" ; 
+	"com.amazonaws:amazon-sqs-java-extended-client-lib:jar:1.0.1.LAMPO" -> "org.mockito:mockito-core:jar:2.7.21:test" ; 
+	"com.amazonaws:aws-java-sdk-sqs:jar:1.11.114:compile" -> "com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" ; 
+	"com.amazonaws:aws-java-sdk-sqs:jar:1.11.114:compile" -> "com.amazonaws:jmespath-java:jar:1.11.114:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "commons-logging:commons-logging:jar:1.1.3:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "org.apache.httpcomponents:httpclient:jar:4.5.2:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "software.amazon.ion:ion-java:jar:1.0.2:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "com.fasterxml.jackson.core:jackson-databind:jar:2.6.6:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:jar:2.6.6:compile" ; 
+	"com.amazonaws:aws-java-sdk-core:jar:1.11.114:compile" -> "joda-time:joda-time:jar:2.8.1:compile" ; 
+	"org.apache.httpcomponents:httpclient:jar:4.5.2:compile" -> "org.apache.httpcomponents:httpcore:jar:4.4.4:compile" ; 
+	"org.apache.httpcomponents:httpclient:jar:4.5.2:compile" -> "commons-codec:commons-codec:jar:1.9:compile" ; 
+	"com.fasterxml.jackson.core:jackson-databind:jar:2.6.6:compile" -> "com.fasterxml.jackson.core:jackson-annotations:jar:2.6.0:compile" ; 
+	"com.fasterxml.jackson.core:jackson-databind:jar:2.6.6:compile" -> "com.fasterxml.jackson.core:jackson-core:jar:2.6.6:compile" ; 
+	"com.amazonaws:aws-java-sdk-s3:jar:1.11.114:compile" -> "com.amazonaws:aws-java-sdk-kms:jar:1.11.114:compile" ; 
+	"junit:junit:jar:4.12:test" -> "org.hamcrest:hamcrest-core:jar:1.3:test" ; 
+	"org.mockito:mockito-core:jar:2.7.21:test" -> "net.bytebuddy:byte-buddy:jar:1.6.11:test" ; 
+	"org.mockito:mockito-core:jar:2.7.21:test" -> "net.bytebuddy:byte-buddy-agent:jar:1.6.11:test" ; 
+	"org.mockito:mockito-core:jar:2.7.21:test" -> "org.objenesis:objenesis:jar:2.5:test" ; 
+ } 
