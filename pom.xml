@@ -2,83 +2,167 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
+    <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.amazonaws</groupId>
-  <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.0.0</version>
-  <packaging>jar</packaging>
-  <name>Amazon SQS Extended Client Library for Java</name>
-  <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon S3.
-  </description>
-  <url>https://github.com/awslabs/amazon-sqs-java-extended-client-lib/</url>
+    <groupId>com.amazonaws</groupId>
+    <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
+    <version>1.0.1.LAMPO</version>
+    <packaging>jar</packaging>
+    <name>Amazon SQS Extended Client Library for Java</name>
+    <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon
+        S3.
+    </description>
+    <url>https://github.com/awslabs/amazon-sqs-java-extended-client-lib/</url>
 
-  <scm>
-    <url>https://github.com/awslabs/amazon-sqs-java-extended-client-lib.git</url>
-  </scm>
+    <scm>
+        <url>https://github.com/awslabs/amazon-sqs-java-extended-client-lib.git</url>
+    </scm>
 
-  <licenses>
-    <license>
-      <name>Apache License, Version 2.0</name>
-      <url>https://aws.amazon.com/apache2.0</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://aws.amazon.com/apache2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-  <developers>
-    <developer>
-      <id>amazonwebservices</id>
-      <organization>Amazon Web Services</organization>
-      <organizationUrl>https://aws.amazon.com</organizationUrl>
-      <roles>
-        <role>developer</role>
-      </roles>
-    </developer>
-  </developers>
+    <developers>
+        <developer>
+            <id>amazonwebservices</id>
+            <organization>Amazon Web Services</organization>
+            <organizationUrl>https://aws.amazon.com</organizationUrl>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
 
-  <properties>
-    <aws-java-sdk.version>1.11.82</aws-java-sdk.version>
-  </properties>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <aws-java-sdk.version>1.11.114</aws-java-sdk.version>
+        <junit.version>4.12</junit.version>
+        <maven.compiler.version>3.6.1</maven.compiler.version>
+        <maven.dependency.plugin.version>3.0.0</maven.dependency.plugin.version>
+        <maven.jxr.version>2.5</maven.jxr.version>
+        <maven.surefile.version>2.19.1</maven.surefile.version>
+        <mockito.version>2.7.21</mockito.version>
+    </properties>
 
-  <dependencies>
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws-java-sdk.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-s3</artifactId>
-      <version>${aws-java-sdk.version}</version>
-    </dependency>
+    <distributionManagement>
+        <repository>
+            <id>nexus</id>
+            <name>Internal Releases</name>
+            <url>https://nexus.peace.daveramsey.com/nexus/content/repositories/releases</url>
+        </repository>
+        <snapshotRepository>
+            <id>nexus</id>
+            <name>Internal Snapshots</name>
+            <url>https://nexus.peace.daveramsey.com/nexus/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
 
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.12</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <version>1.10.19</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-  <build>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.2</version>
-          <configuration>
-            <source>1.7</source>
-            <target>1.7</target>
-            <encoding>UTF-8</encoding>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
-  </build>
+    <dependencies>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-sqs</artifactId>
+            <version>${aws-java-sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+            <version>${aws-java-sdk.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.version}</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven.dependency.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>dependency-tree-output</id>
+                        <goals>
+                            <goal>tree</goal>
+                        </goals>
+                        <phase>prepare-package</phase>
+                        <inherited>true</inherited>
+                        <configuration>
+                            <outputFile>pom-dependencies.gv</outputFile>
+                            <outputType>dot</outputType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Testing Plugins -->
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven.surefile.version}</version>
+                <configuration>
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>org.slf4j:slf4j-simple</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefile.version}</version>
+                <configuration>
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>org.slf4j:slf4j-simple</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jxr-plugin</artifactId>
+                <version>2.5</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-report-plugin</artifactId>
+                <version>${maven.surefile.version}</version>
+            </plugin>
+        </plugins>
+    </reporting>
 </project>
