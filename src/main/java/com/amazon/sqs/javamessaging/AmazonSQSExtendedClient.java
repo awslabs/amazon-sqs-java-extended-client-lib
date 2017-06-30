@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2010-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -33,21 +33,30 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
 import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
+import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
+import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
+import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
+import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
 import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
 import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
 import com.amazonaws.services.sqs.model.DeleteMessageRequest;
+import com.amazonaws.services.sqs.model.DeleteMessageResult;
 import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
 import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
 import com.amazonaws.services.sqs.model.InvalidIdFormatException;
 import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
+import com.amazonaws.services.sqs.model.MessageNotInflightException;
 import com.amazonaws.services.sqs.model.OverLimitException;
 import com.amazonaws.services.sqs.model.PurgeQueueRequest;
+import com.amazonaws.services.sqs.model.PurgeQueueResult;
 import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.ReceiveMessageResult;
@@ -57,6 +66,7 @@ import com.amazonaws.services.sqs.model.SendMessageBatchResult;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.util.IOUtils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -139,10 +149,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param sendMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            SendMessage service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the SendMessage service method, as returned by
 	 *         AmazonSQS.
-	 * 
+	 *
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
 	 *
@@ -193,16 +203,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * characters not included in the list, your request will be rejected. #x9 |
 	 * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param messageBody
 	 *            The message to send. For a list of allowed characters, see the
 	 *            preceding important note.
-	 * 
+	 *
 	 * @return The response from the SendMessage service method, as returned by
 	 *         AmazonSQS.
-	 * 
+	 *
 	 * @throws InvalidMessageContentsException
 	 * @throws UnsupportedOperationException
 	 *
@@ -244,7 +254,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 * 
+	 *
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -278,7 +288,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 * 
+	 *
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -305,10 +315,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param receiveMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            ReceiveMessage service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the ReceiveMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws OverLimitException
 	 *
 	 * @throws AmazonClientException
@@ -396,7 +406,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * For each message returned, the response includes the following:
 	 * </p>
-	 * 
+	 *
 	 * <ul>
 	 * <li>
 	 * <p>
@@ -430,7 +440,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * MD5 digest of the message attributes.
 	 * </p>
 	 * </li>
-	 * 
+	 *
 	 * </ul>
 	 * <p>
 	 * The receipt handle is the identifier you must provide when deleting the
@@ -453,13 +463,13 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * writing code that calls this action, we recommend that you structure your
 	 * code so that it can handle new attributes gracefully.
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
-	 * 
+	 *
 	 * @return The response from the ReceiveMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws OverLimitException
 	 *
 	 * @throws AmazonClientException
@@ -508,8 +518,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param deleteMessageRequest
 	 *            Container for the necessary parameters to execute the
 	 *            DeleteMessage service method on AmazonSQS.
-	 * 
-	 * 
+	 *
+	 * @return The response from the DeleteMessage service method, as returned
+	 *         by AmazonSQS.
+	 *
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
 	 *
@@ -522,7 +534,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+	public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
 
 		if (deleteMessageRequest == null) {
 			String errorMessage = "deleteMessageRequest cannot be null.";
@@ -533,8 +545,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		deleteMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
 		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
-			super.deleteMessage(deleteMessageRequest);
-			return;
+			return super.deleteMessage(deleteMessageRequest);
 		}
 
 		String receiptHandle = deleteMessageRequest.getReceiptHandle();
@@ -545,7 +556,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			origReceiptHandle = getOrigReceiptHandle(receiptHandle);
 		}
 		deleteMessageRequest.setReceiptHandle(origReceiptHandle);
-		super.deleteMessage(deleteMessageRequest);
+		return super.deleteMessage(deleteMessageRequest);
 	}
 
 	/**
@@ -576,15 +587,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * system to be idempotent so that receiving a particular message more than
 	 * once is not a problem.
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param receiptHandle
 	 *            The receipt handle associated with the message to delete.
-	 * 
+	 *
 	 * @return The response from the DeleteMessage service method, as returned
 	 *         by AmazonSQS.
-	 * 
+	 *
 	 * @throws ReceiptHandleIsInvalidException
 	 * @throws InvalidIdFormatException
 	 *
@@ -597,9 +608,94 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             either a problem with the data in the request, or a server
 	 *             side issue.
 	 */
-	public void deleteMessage(String queueUrl, String receiptHandle) {
+	public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle) {
 		DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest(queueUrl, receiptHandle);
-		deleteMessage(deleteMessageRequest);
+		return deleteMessage(deleteMessageRequest);
+	}
+
+	/**
+	 * Simplified method form for invoking the ChangeMessageVisibility
+	 * operation.
+	 *
+	 * @see #changeMessageVisibility(ChangeMessageVisibilityRequest)
+	 */
+	public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl,
+	                                                             String receiptHandle,
+	                                                             Integer visibilityTimeout) {
+		ChangeMessageVisibilityRequest changeMessageVisibilityRequest =
+				new ChangeMessageVisibilityRequest(queueUrl, receiptHandle, visibilityTimeout);
+		return changeMessageVisibility(changeMessageVisibilityRequest);
+	}
+
+	/**
+	 * <p>
+	 * Changes the visibility timeout of a specified message in a queue to a new
+	 * value. The maximum allowed timeout value you can set the value to is 12
+	 * hours. This means you can't extend the timeout of a message in an
+	 * existing queue to more than a total visibility timeout of 12 hours. (For
+	 * more information visibility timeout, see <a href=
+	 * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
+	 * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .)
+	 * </p>
+	 * <p>
+	 * For example, let's say you have a message and its default message
+	 * visibility timeout is 30 minutes. You could call
+	 * <code>ChangeMessageVisiblity</code> with a value of two hours and the
+	 * effective timeout would be two hours and 30 minutes. When that time comes
+	 * near you could again extend the time out by calling
+	 * ChangeMessageVisiblity, but this time the maximum allowed timeout would
+	 * be 9 hours and 30 minutes.
+	 * </p>
+	 * <p>
+	 * <b>NOTE:</b> There is a 120,000 limit for the number of inflight messages
+	 * per queue. Messages are inflight after they have been received from the
+	 * queue by a consuming component, but have not yet been deleted from the
+	 * queue. If you reach the 120,000 limit, you will receive an OverLimit
+	 * error message from Amazon SQS. To help avoid reaching the limit, you
+	 * should delete the messages from the queue after they have been processed.
+	 * You can also increase the number of queues you use to process the
+	 * messages.
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b>If you attempt to set the VisibilityTimeout to an amount
+	 * more than the maximum time left, Amazon SQS returns an error. It will not
+	 * automatically recalculate and increase the timeout to the maximum time
+	 * remaining.
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b>Unlike with a queue, when you change the visibility
+	 * timeout for a specific message, that timeout value is applied immediately
+	 * but is not saved in memory for that message. If you don't delete a
+	 * message after it is received, the visibility timeout for the message the
+	 * next time it is received reverts to the original timeout value, not the
+	 * value you set with the ChangeMessageVisibility action.
+	 * </p>
+	 *
+	 * @param changeMessageVisibilityRequest
+	 *            Container for the necessary parameters to execute the
+	 *            ChangeMessageVisibility service method on AmazonSQS.
+	 *
+	 *
+	 * @throws ReceiptHandleIsInvalidException
+	 * @throws MessageNotInflightException
+	 *
+	 * @throws AmazonClientException
+	 *             If any internal errors are encountered inside the client
+	 *             while attempting to make the request or handle the response.
+	 *             For example if a network connection is not available.
+	 * @throws AmazonServiceException
+	 *             If an error response is returned by AmazonSQS indicating
+	 *             either a problem with the data in the request, or a server
+	 *             side issue.
+	 */
+	public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+			throws AmazonServiceException, AmazonClientException {
+
+		if (isS3ReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle())) {
+			changeMessageVisibilityRequest.setReceiptHandle(
+					getOrigReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle()));
+		}
+		return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
 	}
 
 	/**
@@ -642,10 +738,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param sendMessageBatchRequest
 	 *            Container for the necessary parameters to execute the
 	 *            SendMessageBatch service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the SendMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
@@ -724,15 +820,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * <code>&Attribute.2=that</code>
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param entries
 	 *            A list of <a>SendMessageBatchRequestEntry</a> items.
-	 * 
+	 *
 	 * @return The response from the SendMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws BatchRequestTooLongException
@@ -781,10 +877,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @param deleteMessageBatchRequest
 	 *            Container for the necessary parameters to execute the
 	 *            DeleteMessageBatch service method on AmazonSQS.
-	 * 
+	 *
 	 * @return The response from the DeleteMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
@@ -850,15 +946,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * <p>
 	 * <code>&Attribute.2=that</code>
 	 * </p>
-	 * 
+	 *
 	 * @param queueUrl
 	 *            The URL of the Amazon SQS queue to take action on.
 	 * @param entries
 	 *            A list of receipt handles for the messages to be deleted.
-	 * 
+	 *
 	 * @return The response from the DeleteMessageBatch service method, as
 	 *         returned by AmazonSQS.
-	 * 
+	 *
 	 * @throws BatchEntryIdsNotDistinctException
 	 * @throws TooManyEntriesInBatchRequestException
 	 * @throws InvalidBatchEntryIdException
@@ -876,6 +972,79 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	public DeleteMessageBatchResult deleteMessageBatch(String queueUrl, List<DeleteMessageBatchRequestEntry> entries) {
 		DeleteMessageBatchRequest deleteMessageBatchRequest = new DeleteMessageBatchRequest(queueUrl, entries);
 		return deleteMessageBatch(deleteMessageBatchRequest);
+	}
+
+	/**
+	 * Simplified method form for invoking the ChangeMessageVisibilityBatch
+	 * operation.
+	 *
+	 * @see #changeMessageVisibilityBatch(ChangeMessageVisibilityBatchRequest)
+	 */
+	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+			String queueUrl,
+			java.util.List<ChangeMessageVisibilityBatchRequestEntry> entries) {
+		ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest =
+				new ChangeMessageVisibilityBatchRequest(queueUrl, entries);
+		return changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
+	}
+
+	/**
+	 * <p>
+	 * Changes the visibility timeout of multiple messages. This is a batch
+	 * version of ChangeMessageVisibility. The result of the action on each
+	 * message is reported individually in the response. You can send up to 10
+	 * ChangeMessageVisibility requests with each
+	 * <code>ChangeMessageVisibilityBatch</code> action.
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b>Because the batch request can result in a combination of
+	 * successful and unsuccessful actions, you should check for batch errors
+	 * even when the call returns an HTTP status code of 200.
+	 * </p>
+	 * <p>
+	 * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
+	 * specified using the param.n notation. Values of n are integers starting
+	 * from 1. For example, a parameter list with two elements looks like this:
+	 * </p>
+	 * <p>
+	 * <code>&Attribute.1=this</code>
+	 * </p>
+	 * <p>
+	 * <code>&Attribute.2=that</code>
+	 * </p>
+	 *
+	 * @param changeMessageVisibilityBatchRequest
+	 *            Container for the necessary parameters to execute the
+	 *            ChangeMessageVisibilityBatch service method on AmazonSQS.
+	 *
+	 * @return The response from the ChangeMessageVisibilityBatch service
+	 *         method, as returned by AmazonSQS.
+	 *
+	 * @throws BatchEntryIdsNotDistinctException
+	 * @throws TooManyEntriesInBatchRequestException
+	 * @throws InvalidBatchEntryIdException
+	 * @throws EmptyBatchRequestException
+	 *
+	 * @throws AmazonClientException
+	 *             If any internal errors are encountered inside the client
+	 *             while attempting to make the request or handle the response.
+	 *             For example if a network connection is not available.
+	 * @throws AmazonServiceException
+	 *             If an error response is returned by AmazonSQS indicating
+	 *             either a problem with the data in the request, or a server
+	 *             side issue.
+	 */
+	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+			ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException,
+			AmazonClientException {
+
+		for (ChangeMessageVisibilityBatchRequestEntry entry : changeMessageVisibilityBatchRequest.getEntries()) {
+			if (isS3ReceiptHandle(entry.getReceiptHandle())) {
+				entry.setReceiptHandle(getOrigReceiptHandle(entry.getReceiptHandle()));
+			}
+		}
+
+		return amazonSqsToBeExtended.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
 	}
 
     /**
@@ -901,10 +1070,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @param purgeQueueRequest
      *            Container for the necessary parameters to execute the
      *            PurgeQueue service method on AmazonSQS.
-     *
-     *
-     * @throws PurgeQueueInProgressException
-     * @throws QueueDoesNotExistException
+     * @return The response from the PurgeQueue service method, as returned
+     *         by AmazonSQS.
      *
      * @throws AmazonClientException
      *             If any internal errors are encountered inside the client
@@ -915,7 +1082,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *             either a problem with the data in the request, or a server
      *             side issue.
      */
-	public void purgeQueue(PurgeQueueRequest purgeQueueRequest) throws AmazonServiceException, AmazonClientException {
+	public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest)
+			throws AmazonServiceException, AmazonClientException {
 		LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
 
 		if (purgeQueueRequest == null) {
@@ -926,7 +1094,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		purgeQueueRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		super.purgeQueue(purgeQueueRequest);
+		return super.purgeQueue(purgeQueueRequest);
 	}
 
 	private void deleteMessagePayloadFromS3(String receiptHandle) {
@@ -1030,17 +1198,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			LOG.error(errorMessage, e);
 			throw new AmazonClientException(errorMessage, e);
 		}
+		S3ObjectInputStream is = obj.getObjectContent();
 		try {
-			InputStream objContent = obj.getObjectContent();
-			java.util.Scanner objContentScanner = new java.util.Scanner(objContent, "UTF-8");
-			objContentScanner.useDelimiter("\\A");
-			embeddedText = objContentScanner.hasNext() ? objContentScanner.next() : "";
-			objContentScanner.close();
-			objContent.close();
+			embeddedText = IOUtils.toString(is);
 		} catch (IOException e) {
 			String errorMessage = "Failure when handling the message which was read from S3 object. Message was not received.";
 			LOG.error(errorMessage, e);
 			throw new AmazonClientException(errorMessage, e);
+		} finally {
+			IOUtils.closeQuietly(is, LOG);
 		}
 		return embeddedText;
 	}
