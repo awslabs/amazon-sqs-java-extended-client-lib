@@ -85,6 +85,22 @@ public class AmazonSQSExtendedClientTest {
     }
 
     @Test
+    public void testWhenSendLargeMessageThenKeyIsFromKeyGenerator() {
+        int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+        KeyGenerator keyGenerator = spy(new KeyGenerator());
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true)
+                .withKeyGenerator(keyGenerator);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        verify(keyGenerator, times(1)).generate();
+    }
+
+    @Test
     public void testWhenSendSmallMessageThenS3IsNotUsed() {
         int messageLength = SQS_SIZE_LIMIT;
         String messageBody = generateStringWithLength(messageLength);

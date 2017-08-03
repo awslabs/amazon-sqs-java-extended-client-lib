@@ -21,8 +21,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.annotation.NotThreadSafe;
 
-import java.util.List;
-
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
  * bucket name, and message size threshold for large-payload messages.
@@ -36,6 +34,7 @@ public class ExtendedClientConfiguration {
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
+	private KeyGenerator keyGenerator = KeyGenerator.DEFAULT_KEY_GENERATOR;
 
 	public ExtendedClientConfiguration() {
 		s3 = null;
@@ -48,6 +47,7 @@ public class ExtendedClientConfiguration {
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
+		this.keyGenerator = other.keyGenerator;
 	}
 
 	/**
@@ -176,6 +176,40 @@ public class ExtendedClientConfiguration {
 	 */
 	public int getMessageSizeThreshold() {
 		return messageSizeThreshold;
+	}
+
+	/**
+	 * Sets the key generator for storing message payloads in Amazon S3.
+	 *
+	 * @param keyGenerator
+	 *            The key generator to be used for storing in Amazon S3.
+	 *            Default: {@link KeyGenerator#DEFAULT_KEY_GENERATOR}.
+	 */
+	public void setKeyGenerator(KeyGenerator keyGenerator) {
+		this.keyGenerator = keyGenerator;
+	}
+
+	/**
+	 * Sets the key generator for storing message payloads in Amazon S3.
+	 *
+	 * @param keyGenerator
+	 *            The key generator to be used for storing in Amazon S3.
+	 *            Default: {@link KeyGenerator#DEFAULT_KEY_GENERATOR}.
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withKeyGenerator(KeyGenerator keyGenerator) {
+		setKeyGenerator(keyGenerator);
+		return this;
+	}
+
+	/**
+	 * Gets the key generator for storing message payloads in Amazon S3.
+	 *
+	 * @return The key generator to be used for storing in Amazon S3.
+	 *            Default: {@link KeyGenerator#DEFAULT_KEY_GENERATOR}.
+	 */
+	public KeyGenerator getKeyGenerator() {
+		return keyGenerator;
 	}
 
 	/**

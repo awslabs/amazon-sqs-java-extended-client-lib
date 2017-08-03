@@ -43,11 +43,13 @@ public class ExtendedClientConfigurationTest {
 
         boolean alwaysThroughS3 = true;
         int messageSizeThreshold = 500;
+        KeyGenerator keyGenerator = new KeyGenerator();
 
         ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
 
         extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName)
-                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
+                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold)
+                .withKeyGenerator(keyGenerator);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
@@ -56,6 +58,7 @@ public class ExtendedClientConfigurationTest {
         Assert.assertTrue(newExtendedClientConfig.isLargePayloadSupportEnabled());
         Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
         Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getMessageSizeThreshold());
+        Assert.assertEquals(keyGenerator, newExtendedClientConfig.getKeyGenerator());
 
         Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }

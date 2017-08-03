@@ -24,7 +24,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
@@ -1250,7 +1249,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(batchEntry.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getKeyGenerator().generate();
 
 		// Read the content of the message from message body
 		String messageContentStr = batchEntry.getMessageBody();
@@ -1283,7 +1282,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getKeyGenerator().generate();
 
 		// Read the content of the message from message body
 		String messageContentStr = sendMessageRequest.getMessageBody();
