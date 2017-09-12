@@ -6,7 +6,7 @@
 
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2-BETA</version>
   <packaging>jar</packaging>
   <name>Amazon SQS Extended Client Library for Java</name>
   <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon S3.
@@ -65,6 +65,19 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <distributionManagement>
+    <repository>
+      <id>Label Insight Artifactory</id>
+      <name>Label Insight Artifactory-releases</name>
+      <url>http://artifactory.labelinsight.com/artifactory/libs-release-local</url>
+    </repository>
+    <snapshotRepository>
+      <id>Label Insight Artifactory</id>
+      <name>Label Insight Artifactory-snapshots</name>
+      <url>http://artifactory.labelinsight.com/artifactory/libs-snapshot-local</url>
+    </snapshotRepository>
+  </distributionManagement>
   <build>
     <pluginManagement>
       <plugins>
