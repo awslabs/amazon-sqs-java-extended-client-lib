@@ -21,8 +21,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.annotation.NotThreadSafe;
 
-import java.util.List;
-
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
  * bucket name, and message size threshold for large-payload messages.
@@ -33,6 +31,7 @@ public class ExtendedClientConfiguration {
 
 	private AmazonS3 s3;
 	private String s3BucketName;
+	private String s3Prefix;
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
@@ -40,11 +39,13 @@ public class ExtendedClientConfiguration {
 	public ExtendedClientConfiguration() {
 		s3 = null;
 		s3BucketName = null;
+		s3Prefix = null;
 	}
 
 	public ExtendedClientConfiguration(ExtendedClientConfiguration other) {
 		this.s3 = other.s3;
 		this.s3BucketName = other.s3BucketName;
+		this.s3Prefix = other.s3Prefix;
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
@@ -62,6 +63,24 @@ public class ExtendedClientConfiguration {
 	 *            configured in s3.
 	 */
 	public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+		setLargePayloadSupportEnabled(s3, s3BucketName, null);
+	}
+
+	/**
+	 * Enables support for large-payload messages.
+	 *
+	 * @param s3
+	 *            Amazon S3 client which is going to be used for storing
+	 *            large-payload messages.
+	 * @param s3BucketName
+	 *            Name of the bucket which is going to be used for storing
+	 *            large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 * @param s3Prefix
+	 *			  Optional custom s3 bucket prefix to use for large-payload messages. Needs to
+	 *			  end with a '/'
+	 */
+	public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName, String s3Prefix) {
 		if (s3 == null || s3BucketName == null) {
 			String errorMessage = "S3 client and/or S3 bucket name cannot be null.";
 			LOG.error(errorMessage);
@@ -72,8 +91,29 @@ public class ExtendedClientConfiguration {
 		}
 		this.s3 = s3;
 		this.s3BucketName = s3BucketName;
+		this.s3Prefix = s3Prefix;
 		largePayloadSupport = true;
 		LOG.info("Large-payload support enabled.");
+	}
+
+	/**
+	 * Enables support for large-payload messages.
+	 *
+	 * @param s3
+	 *            Amazon S3 client which is going to be used for storing
+	 *            large-payload messages.
+	 * @param s3BucketName
+	 *            Name of the bucket which is going to be used for storing
+	 *            large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 * @param s3Prefix
+	 *			  Optional custom s3 bucket prefix to use for large-payload messages. Needs to
+	 *			  end with a '/'.
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName, String s3Prefix) {
+		setLargePayloadSupportEnabled(s3, s3BucketName, s3Prefix);
+		return this;
 	}
 
 	/**
@@ -139,6 +179,16 @@ public class ExtendedClientConfiguration {
 	 */
 	public String getS3BucketName() {
 		return s3BucketName;
+	}
+
+	/**
+	 * Gets the name of the S3 bucket prefix which is being used for storing
+	 * large-payload messages.
+	 *
+	 * @return The name of the bucket prefix which is being used.
+	 */
+	public String getS3Prefix() {
+		return s3Prefix;
 	}
 
 	/**

@@ -15,11 +15,6 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -28,20 +23,18 @@ import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.isA;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests the AmazonSQSExtendedClient class.
@@ -52,6 +45,7 @@ public class AmazonSQSExtendedClientTest {
     private AmazonSQS mockSqsBackend;
     private AmazonS3 mockS3;
     private static final String S3_BUCKET_NAME = "test-bucket-name";
+    private static final String S3_PREFIX = "sub/folder/";
     private static final String SQS_QUEUE_URL = "test-queue-url";
 
     private static final int LESS_THAN_SQS_SIZE_LIMIT = 3;
@@ -204,10 +198,39 @@ public class AmazonSQSExtendedClientTest {
         Assert.assertEquals(messageLength, (int)Integer.valueOf(attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getStringValue()));
     }
 
+    @Test
+    public void testWhenS3PrefixIsSetThenPrefixUsedWithS3Key() {
+        int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME, S3_PREFIX);
+
+        AmazonSQS extendedSqs = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        extendedSqs.sendMessage(messageRequest);
+
+        ArgumentCaptor<SendMessageRequest> sendMessageRequestCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
+
+        Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().getMessageAttributes();
+        Assert.assertEquals("Number", attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getDataType());
+        Assert.assertEquals(messageLength, (int)Integer.valueOf(attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getStringValue()));
+        Assert.assertTrue(getPointerFromJson(sendMessageRequestCaptor.getValue().getMessageBody()).getS3Key().startsWith(S3_PREFIX));
+    }
+
     private String generateStringWithLength(int messageLength) {
         char[] charArray = new char[messageLength];
         Arrays.fill(charArray, 'x');
         return new String(charArray);
     }
 
+    private MessageS3Pointer getPointerFromJson(String json) {
+        JsonDataConverter jsonDataConverter = new JsonDataConverter();
+        try {
+            return jsonDataConverter.deserializeFromJson(json, MessageS3Pointer.class);
+        } catch (Exception e) {
+            Assert.fail();
+        }
+        return new MessageS3Pointer();
+    }
 }

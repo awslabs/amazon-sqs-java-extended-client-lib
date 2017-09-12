@@ -15,61 +15,23 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.*;
+import com.amazonaws.util.IOUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Map.Entry;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectInputStream;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageResult;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.MessageNotInflightException;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.PurgeQueueResult;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
-import com.amazonaws.util.IOUtils;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.util.UUID;
+import java.lang.UnsupportedOperationException;
 
 /**
  * Amazon SQS Extended Client extends the functionality of Amazon SQS client.
@@ -980,7 +942,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 */
 	public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
 			String queueUrl,
-			java.util.List<ChangeMessageVisibilityBatchRequestEntry> entries) {
+			List<ChangeMessageVisibilityBatchRequestEntry> entries) {
 		ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest =
 				new ChangeMessageVisibilityBatchRequest(queueUrl, entries);
 		return changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
@@ -1250,7 +1212,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(batchEntry.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getS3Prefix() + UUID.randomUUID().toString();
 
 		// Read the content of the message from message body
 		String messageContentStr = batchEntry.getMessageBody();
@@ -1283,7 +1245,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getS3Prefix() + UUID.randomUUID().toString();
 
 		// Read the content of the message from message body
 		String messageContentStr = sendMessageRequest.getMessageBody();

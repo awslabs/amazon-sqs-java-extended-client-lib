@@ -20,6 +20,7 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.*;
 
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 public class ExtendedClientConfigurationTest {
 
     private static String s3BucketName = "test-bucket-name";
+    private static String s3Prefix = "sub/folder/";
 
     @Before
     public void setup() {
@@ -116,5 +118,18 @@ public class ExtendedClientConfigurationTest {
 
     }
 
+    @Test
+    public void testLargePayloadSupportEnabledS3Prefix() {
+        AmazonS3 s3 = mock(AmazonS3.class);
+        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.setLargePayloadSupportEnabled(s3, s3BucketName, s3Prefix);
+
+        Assert.assertTrue(extendedClientConfiguration.isLargePayloadSupportEnabled());
+        Assert.assertNotNull(extendedClientConfiguration.getAmazonS3Client());
+        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        Assert.assertEquals(s3Prefix, extendedClientConfiguration.getS3Prefix());
+
+    }
 }
