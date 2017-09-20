@@ -17,6 +17,7 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 public class ExtendedClientConfigurationTest {
 
     private static String s3BucketName = "test-bucket-name";
+    private static String s3KeyId = "test-key-id";
 
     @Before
     public void setup() {
@@ -43,11 +45,13 @@ public class ExtendedClientConfigurationTest {
 
         boolean alwaysThroughS3 = true;
         int messageSizeThreshold = 500;
+        SSEAwsKeyManagementParams sseKeyManagementParams = new SSEAwsKeyManagementParams(s3KeyId);
 
         ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
 
         extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName)
-                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
+                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold)
+                .withSSEKeyManagementParams(sseKeyManagementParams);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
@@ -56,6 +60,7 @@ public class ExtendedClientConfigurationTest {
         Assert.assertTrue(newExtendedClientConfig.isLargePayloadSupportEnabled());
         Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
         Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getMessageSizeThreshold());
+        Assert.assertEquals(sseKeyManagementParams, newExtendedClientConfig.getSSEKeyManagementParams());
 
         Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }
@@ -116,5 +121,16 @@ public class ExtendedClientConfigurationTest {
 
     }
 
+    @Test
+    public void testSseKeyManagementParams() {
+
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        Assert.assertNull(extendedClientConfiguration.getSSEKeyManagementParams());
+
+        extendedClientConfiguration.setSSEKeyManagementParams(new SSEAwsKeyManagementParams(s3KeyId));
+        Assert.assertEquals(s3KeyId, extendedClientConfiguration.getSSEKeyManagementParams().getAwsKmsKeyId());
+
+    }
 
 }

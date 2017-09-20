@@ -22,6 +22,7 @@ import java.util.Map;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
@@ -93,6 +94,22 @@ public class AmazonSQSExtendedClientTest {
         extendedSqsWithDefaultConfig.sendMessage(messageRequest);
 
         verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testWhenConfiguredToUseSseAndSendLargeMessageThenPayloadIsStoredInS3Encrypted() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+        SSEAwsKeyManagementParams sseKeyManagementParams = new SSEAwsKeyManagementParams();
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withSSEKeyManagementParams(sseKeyManagementParams);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        ArgumentCaptor<PutObjectRequest> argument = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(argument.capture());
+        Assert.assertEquals(sseKeyManagementParams, argument.getValue().getSSEAwsKeyManagementParams());
     }
 
     @Test

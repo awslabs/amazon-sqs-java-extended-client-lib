@@ -1331,7 +1331,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		ObjectMetadata messageContentStreamMetadata = new ObjectMetadata();
 		messageContentStreamMetadata.setContentLength(messageContentSize);
 		PutObjectRequest putObjectRequest = new PutObjectRequest(clientConfiguration.getS3BucketName(), s3Key,
-				messageContentStream, messageContentStreamMetadata);
+				messageContentStream, messageContentStreamMetadata)
+				.withSSEAwsKeyManagementParams(clientConfiguration.getSSEKeyManagementParams());
 		try {
 			clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
 		} catch (AmazonServiceException e) {

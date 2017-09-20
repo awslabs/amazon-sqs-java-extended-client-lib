@@ -17,6 +17,7 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.annotation.NotThreadSafe;
@@ -36,6 +37,7 @@ public class ExtendedClientConfiguration {
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
+	private SSEAwsKeyManagementParams sseKeyManagementParams;
 
 	public ExtendedClientConfiguration() {
 		s3 = null;
@@ -48,6 +50,7 @@ public class ExtendedClientConfiguration {
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
+		this.sseKeyManagementParams = other.sseKeyManagementParams;
 	}
 
 	/**
@@ -213,5 +216,39 @@ public class ExtendedClientConfiguration {
 	 */
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
+	}
+
+	/**
+	 * Sets the SSEAwsKeyManagementParams to be used for requesting server-side encryption of S3 objects.
+	 *
+	 * @param sseKeyManagementParams
+	 *            Parameters to be used for requesting server-side encryption of S3 objects. Default: No server-side
+	 *            encryption.
+	 */
+	public void setSSEKeyManagementParams(SSEAwsKeyManagementParams sseKeyManagementParams) {
+		this.sseKeyManagementParams = sseKeyManagementParams;
+	}
+
+	/**
+	 * Sets the SSEAwsKeyManagementParams to be used for requesting server-side encryption of S3 objects.
+	 *
+	 * @param sseKeyManagementParams
+	 *            Parameters to be used for requesting server-side encryption of S3 objects. Default: No server-side
+	 *            encryption.
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withSSEKeyManagementParams(SSEAwsKeyManagementParams sseKeyManagementParams) {
+		setSSEKeyManagementParams(sseKeyManagementParams);
+		return this;
+	}
+
+	/**
+	 * Gets the SSEAwsKeyManagementParams to be used for requesting server-side encryption of S3 objects.
+	 *
+	 * @return Parameters to be used for requesting server-side encryption of S3 objects. Default: No server-side
+	 *         encryption.
+	 */
+	public SSEAwsKeyManagementParams getSSEKeyManagementParams() {
+		return sseKeyManagementParams; 
 	}
 }
