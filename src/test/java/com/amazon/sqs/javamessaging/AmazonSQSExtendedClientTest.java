@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
+import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
@@ -136,6 +138,24 @@ public class AmazonSQSExtendedClientTest {
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
         verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testReceiveMessageMultipleTimesDoesNotAdditionallyAlterReceiveMessageRequest() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(new ReceiveMessageResult());
+
+        ReceiveMessageRequest messageRequest = new ReceiveMessageRequest();
+        ReceiveMessageRequest expectedRequest = new ReceiveMessageRequest()
+                .withMessageAttributeNames(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+
+        sqsExtended.receiveMessage(messageRequest);
+        Assert.assertEquals(expectedRequest, messageRequest);
+
+        sqsExtended.receiveMessage(messageRequest);
+        Assert.assertEquals(expectedRequest, messageRequest);
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
  */
 
 package com.amazon.sqs.javamessaging;
-
-import java.util.List;
-import java.util.Map;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -55,6 +52,8 @@ import com.amazonaws.services.sqs.model.InvalidIdFormatException;
 import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
 import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesRequest;
 import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesResult;
+import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
+import com.amazonaws.services.sqs.model.ListQueueTagsResult;
 import com.amazonaws.services.sqs.model.ListQueuesRequest;
 import com.amazonaws.services.sqs.model.ListQueuesResult;
 import com.amazonaws.services.sqs.model.MessageNotInflightException;
@@ -77,7 +76,14 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
+import com.amazonaws.services.sqs.model.TagQueueRequest;
+import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.services.sqs.model.UntagQueueRequest;
+import com.amazonaws.services.sqs.model.UntagQueueResult;
+
+import java.util.List;
+import java.util.Map;
 
 abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	AmazonSQS amazonSqsToBeExtended;
@@ -124,7 +130,7 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 		return amazonSqsToBeExtended.sendMessage(sendMessageRequest);
 	}
 
-    /**
+	/**
      * <p>
      * Retrieves one or more messages, with a maximum limit of 10 messages,
      * from the specified queue. Long poll support is enabled by using the
@@ -2013,6 +2019,36 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 	public void shutdown() {
 
 		amazonSqsToBeExtended.shutdown();
+	}
+
+	/** {@inheritDoc} */
+	@Override public ListQueueTagsResult listQueueTags(final ListQueueTagsRequest listQueueTagsRequest) {
+		return amazonSqsToBeExtended.listQueueTags(listQueueTagsRequest);
+	}
+
+	/** {@inheritDoc} */
+	@Override public ListQueueTagsResult listQueueTags(final String queueUrl) {
+		return amazonSqsToBeExtended.listQueueTags(queueUrl);
+	}
+
+	/** {@inheritDoc} */
+	@Override public TagQueueResult tagQueue(final TagQueueRequest tagQueueRequest) {
+		return amazonSqsToBeExtended.tagQueue(tagQueueRequest);
+	}
+
+	/** {@inheritDoc} */
+	@Override public TagQueueResult tagQueue(final String queueUrl, final Map<String, String> tags) {
+		return amazonSqsToBeExtended.tagQueue(queueUrl, tags);
+	}
+
+	/** {@inheritDoc} */
+	@Override public UntagQueueResult untagQueue(final UntagQueueRequest untagQueueRequest) {
+		return amazonSqsToBeExtended.untagQueue(untagQueueRequest);
+	}
+
+	/** {@inheritDoc} */
+	@Override public UntagQueueResult untagQueue(final String queueUrl, final List<String> tagKeys) {
+		return amazonSqsToBeExtended.untagQueue(queueUrl, tagKeys);
 	}
 
 }
