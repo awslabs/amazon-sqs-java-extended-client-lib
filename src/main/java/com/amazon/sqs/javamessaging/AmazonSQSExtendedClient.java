@@ -553,7 +553,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		String receiptHandle = deleteMessageRequest.getReceiptHandle();
 		String origReceiptHandle = receiptHandle;
 		if (isS3ReceiptHandle(receiptHandle)) {
-			deleteMessagePayloadFromS3(receiptHandle);
+			if (!clientConfiguration.isRetainS3Messages())
+				deleteMessagePayloadFromS3(receiptHandle);
 			origReceiptHandle = getOrigReceiptHandle(receiptHandle);
 		}
 		deleteMessageRequest.setReceiptHandle(origReceiptHandle);
@@ -915,7 +916,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			String receiptHandle = entry.getReceiptHandle();
 			String origReceiptHandle = receiptHandle;
 			if (isS3ReceiptHandle(receiptHandle)) {
-				deleteMessagePayloadFromS3(receiptHandle);
+				if (!clientConfiguration.isRetainS3Messages())
+					deleteMessagePayloadFromS3(receiptHandle);
 				origReceiptHandle = getOrigReceiptHandle(receiptHandle);
 			}
 			entry.setReceiptHandle(origReceiptHandle);
@@ -1252,7 +1254,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(batchEntry.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getS3KeyGenerator().generateObjectKey(batchEntry);
 
 		// Read the content of the message from message body
 		String messageContentStr = batchEntry.getMessageBody();
@@ -1285,7 +1287,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = clientConfiguration.getS3KeyGenerator().generateObjectKey(sendMessageRequest);
 
 		// Read the content of the message from message body
 		String messageContentStr = sendMessageRequest.getMessageBody();
