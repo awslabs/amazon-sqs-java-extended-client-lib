@@ -1097,7 +1097,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return super.purgeQueue(purgeQueueRequest);
 	}
 
-	private void deleteMessagePayloadFromS3(String receiptHandle) {
+	void deleteMessagePayloadFromS3(String receiptHandle) {
 		String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle,
 				SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
 		String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
@@ -1145,14 +1145,14 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 	}
 
-	private String embedS3PointerInReceiptHandle(String receiptHandle, String s3MsgBucketName, String s3MsgKey) {
+	String embedS3PointerInReceiptHandle(String receiptHandle, String s3MsgBucketName, String s3MsgKey) {
 		String modifiedReceiptHandle = SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
 				+ SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
 				+ s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
 		return modifiedReceiptHandle;
 	}
 
-	private MessageS3Pointer readMessageS3PointerFromJSON(String messageBody) {
+	MessageS3Pointer readMessageS3PointerFromJSON(String messageBody) {
 
 		MessageS3Pointer s3Pointer = null;
 		try {
@@ -1166,7 +1166,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return s3Pointer;
 	}
 
-	private String getOrigReceiptHandle(String receiptHandle) {
+	String getOrigReceiptHandle(String receiptHandle) {
 		int secondOccurence = receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER,
 				receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER) + 1);
 		return receiptHandle.substring(secondOccurence + SQSExtendedClientConstants.S3_KEY_MARKER.length());
@@ -1178,12 +1178,12 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return receiptHandle.substring(firstOccurence + marker.length(), secondOccurence);
 	}
 
-	private boolean isS3ReceiptHandle(String receiptHandle) {
+	boolean isS3ReceiptHandle(String receiptHandle) {
 		return receiptHandle.contains(SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER)
 				&& receiptHandle.contains(SQSExtendedClientConstants.S3_KEY_MARKER);
 	}
 
-	private String getTextFromS3(String s3BucketName, String s3Key) {
+	String getTextFromS3(String s3BucketName, String s3Key) {
 		GetObjectRequest getObjectRequest = new GetObjectRequest(s3BucketName, s3Key);
 		String embeddedText = null;
 		S3Object obj = null;
@@ -1211,14 +1211,14 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return embeddedText;
 	}
 
-	private boolean isLarge(SendMessageRequest sendMessageRequest) {
+	boolean isLarge(SendMessageRequest sendMessageRequest) {
 		int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(sendMessageRequest.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
 		return (totalMsgSize > clientConfiguration.getMessageSizeThreshold());
 	}
 
-	private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
+	boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
 		int msgAttributesSize = getMsgAttributesSize(batchEntry.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(batchEntry.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
@@ -1248,7 +1248,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return totalMsgAttributesSize;
 	}
 
-	private SendMessageBatchRequestEntry storeMessageInS3(SendMessageBatchRequestEntry batchEntry) {
+	SendMessageBatchRequestEntry storeMessageInS3(SendMessageBatchRequestEntry batchEntry) {
 
 		checkMessageAttributes(batchEntry.getMessageAttributes());
 
@@ -1281,7 +1281,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return batchEntry;
 	}
 
-	private SendMessageRequest storeMessageInS3(SendMessageRequest sendMessageRequest) {
+	SendMessageRequest storeMessageInS3(SendMessageRequest sendMessageRequest) {
 
 		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
 
