@@ -602,4 +602,87 @@ public class AmazonSQSAsyncExtendedClient extends AmazonSQSAsyncExtendedClientBa
         SendMessageBatchRequest sendMessageBatchRequest = new SendMessageBatchRequest(queueUrl, entries);
         return sendMessageBatchAsync(sendMessageBatchRequest, asyncHandler);
     }
+
+    @Override
+    public SendMessageResult sendMessage(SendMessageRequest sendMessageRequest) {
+        return synchClient.sendMessage(sendMessageRequest);
+    }
+
+    @Override
+    public SendMessageResult sendMessage(String queueUrl, String messageBody) {
+        return synchClient.sendMessage(queueUrl, messageBody);
+    }
+
+    @Override
+    public ReceiveMessageResult receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
+        return synchClient.receiveMessage(receiveMessageRequest);
+    }
+
+    @Override
+    public ReceiveMessageResult receiveMessage(String queueUrl) {
+        return synchClient.receiveMessage(queueUrl);
+    }
+
+    @Override
+    public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+        return synchClient.deleteMessage(deleteMessageRequest);
+    }
+
+    @Override
+    public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle) {
+        return synchClient.deleteMessage(queueUrl, receiptHandle);
+    }
+
+    @Override
+    public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl,
+                                                                 String receiptHandle,
+                                                                 Integer visibilityTimeout) {
+        return synchClient.changeMessageVisibility(queueUrl, receiptHandle, visibilityTimeout);
+    }
+
+    @Override
+    public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+            throws AmazonClientException {
+
+        return synchClient.changeMessageVisibility(changeMessageVisibilityRequest);
+    }
+
+    @Override
+    public SendMessageBatchResult sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest) {
+        return synchClient.sendMessageBatch(sendMessageBatchRequest);
+    }
+
+    @Override
+    public SendMessageBatchResult sendMessageBatch(String queueUrl, List<SendMessageBatchRequestEntry> entries) {
+        return synchClient.sendMessageBatch(queueUrl, entries);
+    }
+
+    @Override
+    public DeleteMessageBatchResult deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest) {
+        return synchClient.deleteMessageBatch(deleteMessageBatchRequest);
+    }
+
+    @Override
+    public DeleteMessageBatchResult deleteMessageBatch(String queueUrl, List<DeleteMessageBatchRequestEntry> entries) {
+        return synchClient.deleteMessageBatch(queueUrl, entries);
+    }
+
+    @Override
+    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+            String queueUrl,
+            java.util.List<ChangeMessageVisibilityBatchRequestEntry> entries) {
+        return synchClient.changeMessageVisibilityBatch(queueUrl, entries);
+    }
+
+    @Override
+    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+            ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonClientException {
+        return synchClient.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
+    }
+
+    @Override
+    public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest)
+            throws AmazonClientException {
+        return synchClient.purgeQueue(purgeQueueRequest);
+    }
 }
