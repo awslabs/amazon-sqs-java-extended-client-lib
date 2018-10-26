@@ -365,7 +365,18 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				String s3MsgBucketName = s3Pointer.getS3BucketName();
 				String s3MsgKey = s3Pointer.getS3Key();
 
-				String origMsgBody = getTextFromS3(s3MsgBucketName, s3MsgKey);
+				final String origMsgBody;
+				try {
+					origMsgBody = getTextFromS3(s3MsgBucketName, s3MsgKey);
+				} catch (AmazonServiceException e) {
+					if (((AmazonServiceException) e.getCause()).getErrorCode().equals("NoSuchKey")
+						&& clientConfiguration.isIgnorePayloadNotFound()) {
+						deleteMessage(receiveMessageRequest.getQueueUrl(), message.getReceiptHandle());
+						LOG.warn("SQS message deleted as it could not be found in S3");
+						continue;
+					}
+					throw e;
+				}
 				LOG.info("S3 object read, Bucket name: " + s3MsgBucketName + ", Object key: " + s3MsgKey + ".");
 
 				message.setBody(origMsgBody);

@@ -17,13 +17,19 @@ package com.amazon.sqs.javamessaging;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
+import com.amazonaws.services.sqs.model.DeleteMessageRequest;
+import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.ReceiveMessageResult;
@@ -36,7 +42,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -222,6 +230,71 @@ public class AmazonSQSExtendedClientTest {
         Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().getMessageAttributes();
         Assert.assertEquals("Number", attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getDataType());
         Assert.assertEquals(messageLength, (int)Integer.valueOf(attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getStringValue()));
+    }
+
+    @Test
+    public void testWhenIgnorePayloadNotFoundIsSentThenNotFoundKeysInS3AreDeletedInSQS() throws Exception {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+            .withIgnorePayloadNotFound(true).withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+
+        AmazonServiceException mockException = mock(AmazonServiceException.class);
+        when(mockException.getErrorCode()).thenReturn("NoSuchKey");
+
+        Message mockMessage = mock(Message.class);
+        MessageS3Pointer messageS3Pointer = new MessageS3Pointer();
+        when(mockMessage.getBody()).thenReturn(new JsonDataConverter().serializeToJson(messageS3Pointer));
+        when(mockMessage.getReceiptHandle()).thenReturn("receipt-handle");
+        Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
+        messageAttributes.put(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, new MessageAttributeValue());
+        when(mockMessage.getMessageAttributes()).thenReturn(messageAttributes);
+
+        ReceiveMessageResult mockReceiveMessageResult = mock(ReceiveMessageResult.class);
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(mockReceiveMessageResult);
+        when(mockReceiveMessageResult.getMessages()).thenReturn(Collections.singletonList(mockMessage));
+
+        doThrow(mockException).when(mockS3).getObject(any(GetObjectRequest.class));
+
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        sqsExtended.receiveMessage(SQS_QUEUE_URL);
+
+        ArgumentCaptor<DeleteMessageRequest> deleteMessageRequestArgumentCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(mockSqsBackend).deleteMessage(deleteMessageRequestArgumentCaptor.capture());
+
+        Assert.assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().getQueueUrl());
+        Assert.assertEquals("receipt-handle", deleteMessageRequestArgumentCaptor.getValue().getReceiptHandle());
+    }
+
+    @Test
+    public void testWhenIgnorePayloadNotFoundIsNotSentThenNotFoundKeysInS3AreNotDeletedInSQS() throws Exception {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+            .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+
+        AmazonServiceException mockException = mock(AmazonServiceException.class);
+        when(mockException.getErrorCode()).thenReturn("NoSuchKey");
+
+        Message mockMessage = mock(Message.class);
+        MessageS3Pointer messageS3Pointer = new MessageS3Pointer();
+        when(mockMessage.getBody()).thenReturn(new JsonDataConverter().serializeToJson(messageS3Pointer));
+        when(mockMessage.getReceiptHandle()).thenReturn("receipt-handle");
+        Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
+        messageAttributes.put(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, new MessageAttributeValue());
+        when(mockMessage.getMessageAttributes()).thenReturn(messageAttributes);
+
+        ReceiveMessageResult mockReceiveMessageResult = mock(ReceiveMessageResult.class);
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(mockReceiveMessageResult);
+        when(mockReceiveMessageResult.getMessages()).thenReturn(Collections.singletonList(mockMessage));
+
+        doThrow(mockException).when(mockS3).getObject(any(GetObjectRequest.class));
+
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        try {
+            sqsExtended.receiveMessage(SQS_QUEUE_URL);
+            Assert.fail("exception should have been thrown");
+        } catch (AmazonServiceException e) {
+            verify(mockSqsBackend, never()).deleteMessage(any(DeleteMessageRequest.class));
+        }
     }
 
     private String generateStringWithLength(int messageLength) {

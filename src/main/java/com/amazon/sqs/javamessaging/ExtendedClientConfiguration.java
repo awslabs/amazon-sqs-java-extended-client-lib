@@ -35,6 +35,7 @@ public class ExtendedClientConfiguration {
 	private String s3BucketName;
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
+	private boolean ignorePayloadNotFound = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
 
 	public ExtendedClientConfiguration() {
@@ -47,6 +48,7 @@ public class ExtendedClientConfiguration {
 		this.s3BucketName = other.s3BucketName;
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
+		this.ignorePayloadNotFound = other.ignorePayloadNotFound;
 		this.messageSizeThreshold = other.messageSizeThreshold;
 	}
 
@@ -214,4 +216,43 @@ public class ExtendedClientConfiguration {
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
 	}
+
+	/**
+	 * Sets whether or not messages should be removed from Amazon SQS
+	 * when payloads are not found in Amazon S3.
+	 *
+	 * @param ignorePayloadNotFound
+	 *            Whether or not messages should be removed from Amazon SQS
+	 *            when payloads are not found in Amazon S3. Default: false
+	 */
+	public void setIgnorePayloadNotFound(boolean ignorePayloadNotFound) {
+		this.ignorePayloadNotFound = ignorePayloadNotFound;
+	}
+
+	/**
+	 * Sets whether or not messages should be removed from Amazon SQS
+	 * when payloads are not found in Amazon S3.
+	 *
+	 * @param ignorePayloadNotFound
+	 *            Whether or not messages should be removed from Amazon SQS
+	 *            when payloads are not found in Amazon S3. Default: false
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withIgnorePayloadNotFound(boolean ignorePayloadNotFound) {
+		setIgnorePayloadNotFound(ignorePayloadNotFound);
+		return this;
+	}
+
+	/**
+	 * Checks whether or not messages should be removed from Amazon SQS
+	 * when payloads are not found in Amazon S3.
+	 *
+	 * @return True if messages should be removed from Amazon SQS
+	 *         when payloads are not found in Amazon S3. Default: false
+	 */
+	public boolean isIgnorePayloadNotFound() {
+		return ignorePayloadNotFound;
+	}
+
+
 }
