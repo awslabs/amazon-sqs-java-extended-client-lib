@@ -22,9 +22,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
@@ -775,15 +773,41 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		List<SendMessageBatchRequestEntry> batchEntries = sendMessageBatchRequest.getEntries();
 
-		int index = 0;
-		for (SendMessageBatchRequestEntry entry : batchEntries) {
-			if (clientConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
-				batchEntries.set(index, storeMessageInS3(entry));
-			}
-			++index;
+		List<Integer> smallMessages = new LinkedList<>();
+		long totalSize = moveIndividuallyLargeMessagesToS3(batchEntries, smallMessages);
+
+		if (isLarge(totalSize) && !smallMessages.isEmpty()) {
+			moveRemainingMessagesToS3(batchEntries, smallMessages);
 		}
 
 		return super.sendMessageBatch(sendMessageBatchRequest);
+	}
+
+	private void moveRemainingMessagesToS3(List<SendMessageBatchRequestEntry> batchEntries, List<Integer> smallMessages) {
+		for (Integer smallMessageIndex : smallMessages) {
+			batchEntries.set(smallMessageIndex, storeMessageInS3(batchEntries.get(smallMessageIndex)));
+		}
+	}
+
+	private long moveIndividuallyLargeMessagesToS3(List<SendMessageBatchRequestEntry> batchEntries,
+												   List<Integer> smallMessages) {
+		int index = 0;
+		long totalSize = 0;
+		for (SendMessageBatchRequestEntry entry : batchEntries) {
+			long entrySize = sizeOf(entry);
+
+			if (clientConfiguration.isAlwaysThroughS3() || isLarge(entrySize)) {
+				SendMessageBatchRequestEntry storedVersion = storeMessageInS3(entry);
+				batchEntries.set(index, storedVersion);
+				totalSize += sizeOf(storedVersion);
+			} else {
+				totalSize += entrySize;
+				smallMessages.add(index);
+			}
+
+			++index;
+		}
+		return totalSize;
 	}
 
 	/**
@@ -1215,14 +1239,17 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(sendMessageRequest.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > clientConfiguration.getMessageSizeThreshold());
+		return isLarge(totalMsgSize);
 	}
 
-	private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
+	private boolean isLarge(long size) {
+		return (size > clientConfiguration.getMessageSizeThreshold());
+	}
+
+	private long sizeOf(SendMessageBatchRequestEntry batchEntry) {
 		int msgAttributesSize = getMsgAttributesSize(batchEntry.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(batchEntry.getMessageBody());
-		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > clientConfiguration.getMessageSizeThreshold());
+		return msgAttributesSize + msgBodySize;
 	}
 
 	private int getMsgAttributesSize(Map<String, MessageAttributeValue> msgAttributes) {
