@@ -61,7 +61,7 @@ public class AmazonSQSExtendedClientTest {
     private static final int MORE_THAN_SQS_SIZE_LIMIT = SQS_SIZE_LIMIT + 1;
 
     // should be > 1 and << SQS_SIZE_LIMIT
-    private static final int ARBITRATY_SMALLER_THRESSHOLD = 500;
+    private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
 
     @Before
     public void setupClient() {
@@ -128,10 +128,10 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testWhenSendMessageWithSetMessageSizeThresholdThenThresholdIsHonored() {
-        int messageLength = ARBITRATY_SMALLER_THRESSHOLD * 2;
+        int messageLength = ARBITRARY_SMALLER_THRESHOLD * 2;
         String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRARY_SMALLER_THRESHOLD);
 
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
 
@@ -159,8 +159,42 @@ public class AmazonSQSExtendedClientTest {
     }
 
     @Test
+    public void testWhenSmallMessageBatchIsSentThenNoMessagesStoredInS3() {
+        // This creates 10 messages all well within the threshold
+
+        int[] messageLengthForCounter = new int[] {
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000,
+                1_000
+        };
+
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<SendMessageBatchRequestEntry>();
+        for (int i = 0; i < 10; i++) {
+            SendMessageBatchRequestEntry entry = new SendMessageBatchRequestEntry();
+            int messageLength = messageLengthForCounter[i];
+            String messageBody = generateStringWithLength(messageLength);
+            entry.setMessageBody(messageBody);
+            entry.setId("entry_" + i);
+            batchEntries.add(entry);
+        }
+
+        SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
+        extendedSqsWithDefaultConfig.sendMessageBatch(batchRequest);
+
+        // There should be no puts
+        verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
     public void testWhenMessageBatchIsSentThenOnlyMessagesLargerThanThresholdAreStoredInS3() {
-        // This creates 10 messages, out of which only two are below the threshold (100K and 200K),
+        // This creates 10 messages, out of which only two are below the threshold (100K and 20K),
         // and the other 8 are above the threshold
 
         int[] messageLengthForCounter = new int[] {
@@ -172,7 +206,7 @@ public class AmazonSQSExtendedClientTest {
                 700_000,
                 800_000,
                 900_000,
-                200_000,
+                20_000,
                 1000_000
         };
 
@@ -189,8 +223,43 @@ public class AmazonSQSExtendedClientTest {
         SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
         extendedSqsWithDefaultConfig.sendMessageBatch(batchRequest);
 
-        // There should be 8 puts for the 8 messages above the threshhold
+        // There should be 8 puts for the 8 messages above the threshold
         verify(mockS3, times(8)).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testWhenMessageBatchIsSentWhereSumOfMessageSizesIsOverTheThresholdThenAllArePutToS3() {
+        // This creates 10 messages, all of which are below the threshold, but together would make
+        // a single request over the threshold
+
+        int[] messageLengthForCounter = new int[] {
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_214,
+                26_219
+        };
+
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<SendMessageBatchRequestEntry>();
+        for (int i = 0; i < 10; i++) {
+            SendMessageBatchRequestEntry entry = new SendMessageBatchRequestEntry();
+            int messageLength = messageLengthForCounter[i];
+            String messageBody = generateStringWithLength(messageLength);
+            entry.setMessageBody(messageBody);
+            entry.setId("entry_" + i);
+            batchEntries.add(entry);
+        }
+
+        SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
+        extendedSqsWithDefaultConfig.sendMessageBatch(batchRequest);
+
+        // There should be 10 puts, as the whole batch is moved to s3
+        verify(mockS3, times(10)).putObject(isA(PutObjectRequest.class));
     }
 
     @Test
