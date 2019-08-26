@@ -29,6 +29,7 @@ import static org.mockito.Mockito.*;
 public class ExtendedClientConfigurationTest {
 
     private static String s3BucketName = "test-bucket-name";
+    private static String s3Key = "sqs/messages/";
 
     @Before
     public void setup() {
@@ -46,7 +47,7 @@ public class ExtendedClientConfigurationTest {
 
         ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
 
-        extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName)
+        extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName,s3Key)
                 .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
@@ -76,6 +77,48 @@ public class ExtendedClientConfigurationTest {
     }
 
     @Test
+    public void testCopyConstructorWithS3Key() {
+
+        AmazonS3 s3 = mock(AmazonS3.class);
+        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
+
+        boolean alwaysThroughS3 = true;
+        int messageSizeThreshold = 500;
+
+        ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
+
+        extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName,s3Key)
+                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
+
+        ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
+
+        Assert.assertEquals(s3, newExtendedClientConfig.getAmazonS3Client());
+        Assert.assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
+        Assert.assertEquals(s3Key, newExtendedClientConfig.getS3Key());
+        Assert.assertTrue(newExtendedClientConfig.isLargePayloadSupportEnabled());
+        Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
+        Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getMessageSizeThreshold());
+
+        Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
+    }
+
+    @Test
+    public void testLargePayloadSupportEnabledWithS3Key() {
+
+        AmazonS3 s3 = mock(AmazonS3.class);
+        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
+
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.setLargePayloadSupportEnabled(s3, s3BucketName,s3Key);
+
+        Assert.assertTrue(extendedClientConfiguration.isLargePayloadSupportEnabled());
+        Assert.assertNotNull(extendedClientConfiguration.getAmazonS3Client());
+        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        Assert.assertEquals(s3Key, extendedClientConfiguration.getS3Key());
+
+    }
+
+    @Test
     public void testDisableLargePayloadSupport() {
 
         AmazonS3 s3 = mock(AmazonS3.class);
@@ -86,6 +129,7 @@ public class ExtendedClientConfigurationTest {
 
         Assert.assertNull(extendedClientConfiguration.getAmazonS3Client());
         Assert.assertNull(extendedClientConfiguration.getS3BucketName());
+        Assert.assertNull(extendedClientConfiguration.getS3Key());
 
         verify(s3, never()).putObject(isA(PutObjectRequest.class));
     }
@@ -113,6 +157,15 @@ public class ExtendedClientConfigurationTest {
         int messageLength = 1000;
         extendedClientConfiguration.setMessageSizeThreshold(messageLength);
         Assert.assertEquals(messageLength, extendedClientConfiguration.getMessageSizeThreshold());
+
+    }
+    @Test
+    public void testS3KeyUsedWhenKeyNameIsNotSpecified() {
+        AmazonS3 s3 = mock(AmazonS3.class);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withLargePayloadSupportEnabled(s3,s3BucketName);
+
+        Assert.assertEquals(false,extendedClientConfiguration.isS3KeyUsed());
 
     }
 

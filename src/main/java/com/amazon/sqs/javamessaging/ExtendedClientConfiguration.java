@@ -21,8 +21,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import com.amazonaws.annotation.NotThreadSafe;
 
-import java.util.List;
-
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
  * bucket name, and message size threshold for large-payload messages.
@@ -33,6 +31,7 @@ public class ExtendedClientConfiguration {
 
 	private AmazonS3 s3;
 	private String s3BucketName;
+	private String s3Key;
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
@@ -40,11 +39,13 @@ public class ExtendedClientConfiguration {
 	public ExtendedClientConfiguration() {
 		s3 = null;
 		s3BucketName = null;
+		s3Key= null;
 	}
 
 	public ExtendedClientConfiguration(ExtendedClientConfiguration other) {
 		this.s3 = other.s3;
 		this.s3BucketName = other.s3BucketName;
+		this.s3Key = other.s3Key;
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
@@ -94,12 +95,64 @@ public class ExtendedClientConfiguration {
 	}
 
 	/**
+	 *
+	 * @param s3
+	 * 	          Amazon S3 client which is going to be used for storing
+	 * 	          large-payload messages.
+	 * @param s3BucketName
+	 *            Name of the bucket which is going to be used for storing
+	 * 	          large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 * @param s3Key
+	 *            Name of the s3 key which is going to be used for storing
+	 *  	      large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 */
+	public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName, String s3Key) {
+		if (s3 == null || s3BucketName == null || s3Key == null) {
+			String errorMessage = "S3 client and/or S3 bucket name and/or S3 key cannot be null.";
+			LOG.error(errorMessage);
+			throw new AmazonClientException(errorMessage);
+		}
+		if (isLargePayloadSupportEnabled()) {
+			LOG.warn("Large-payload support is already enabled. Overwriting AmazonS3Client, S3BucketName, S3key.");
+		}
+		this.s3 = s3;
+		this.s3BucketName = s3BucketName;
+		this.s3Key= s3Key;
+		largePayloadSupport = true;
+		LOG.info("Large-payload support enabled.");
+	}
+
+	/**
+	 *
+	 * @param s3
+	 * 	          Amazon S3 client which is going to be used for storing
+	 * 	          large-payload messages.
+	 * @param s3BucketName
+	 *            Name of the bucket which is going to be used for storing
+	 * 	          large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 * @param s3Key
+	 *            Name of the s3 key which is going to be used for storing
+	 *  	      large-payload messages. The bucket must be already created and
+	 *            configured in s3.
+	 * @return the updated ExtendedClientConfiguration object.
+	 */
+	public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName,String s3Key) {
+		setLargePayloadSupportEnabled(s3, s3BucketName,s3Key);
+		return this;
+	}
+
+
+	/**
 	 * Disables support for large-payload messages.
 	 */
 	public void setLargePayloadSupportDisabled() {
 		s3 = null;
 		s3BucketName = null;
 		largePayloadSupport = false;
+		s3Key = null;
 		LOG.info("Large-payload support disabled.");
 	}
 
@@ -139,6 +192,16 @@ public class ExtendedClientConfiguration {
 	 */
 	public String getS3BucketName() {
 		return s3BucketName;
+	}
+
+	/**
+	 * Gets the name of the S3 key which is being used for storing
+	 * large-payload messages.
+	 *
+	 * @return The name of the key which is being used.
+	 */
+	public String getS3Key() {
+		return s3Key;
 	}
 
 	/**
@@ -213,5 +276,14 @@ public class ExtendedClientConfiguration {
 	 */
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
+	}
+
+	/**
+	 * Checks whether or not S3 key exists.
+	 *
+	 * @return True if S3 key is specified in client. Default: false
+	 */
+	public boolean isS3KeyUsed() {
+		return s3Key != null;
 	}
 }
