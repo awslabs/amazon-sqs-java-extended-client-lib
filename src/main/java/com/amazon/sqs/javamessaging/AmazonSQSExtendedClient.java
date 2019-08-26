@@ -1252,7 +1252,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(batchEntry.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = getS3Key();
 
 		// Read the content of the message from message body
 		String messageContentStr = batchEntry.getMessageBody();
@@ -1285,7 +1285,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
 
-		String s3Key = UUID.randomUUID().toString();
+		String s3Key = getS3Key();
 
 		// Read the content of the message from message body
 		String messageContentStr = sendMessageRequest.getMessageBody();
@@ -1313,6 +1313,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		sendMessageRequest.setMessageBody(s3PointerStr);
 
 		return sendMessageRequest;
+	}
+
+	private String getS3Key() {
+		return clientConfiguration.isS3KeyUsed() ? clientConfiguration.getS3Key() + UUID.randomUUID().toString() : UUID.randomUUID().toString();
 	}
 
 	private String getJSONFromS3Pointer(MessageS3Pointer s3Pointer) {
