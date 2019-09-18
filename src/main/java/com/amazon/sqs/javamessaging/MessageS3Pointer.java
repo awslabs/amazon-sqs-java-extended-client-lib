@@ -21,7 +21,7 @@ package com.amazon.sqs.javamessaging;
  * will be serialized to JSON and sent through Amazon SQS.
  * 
  */
-class MessageS3Pointer {
+public class MessageS3Pointer {
 	private String s3BucketName;
 	private String s3Key;
 
