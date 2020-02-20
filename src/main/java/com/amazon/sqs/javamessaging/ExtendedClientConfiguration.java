@@ -17,6 +17,8 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AccessControlList;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import com.amazonaws.annotation.NotThreadSafe;
@@ -35,6 +37,9 @@ public class ExtendedClientConfiguration {
 	private String s3BucketName;
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
+	private AccessControlList acl;
+	private CannedAccessControlList cannedAcl;
+
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
 
 	public ExtendedClientConfiguration() {
@@ -48,6 +53,8 @@ public class ExtendedClientConfiguration {
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
+		this.acl = other.acl;
+		this.cannedAcl = other.cannedAcl;
 	}
 
 	/**
@@ -214,4 +221,70 @@ public class ExtendedClientConfiguration {
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
 	}
+
+	/**
+	 * Sets an ACL Policy for S3 to be applied with PutObject operations.
+	 *
+	 * @param s3Acl
+	 * 				ACL Policy to apply when putting a large object in S3
+	 */
+	public void setS3Acl(AccessControlList s3Acl) {
+		acl = s3Acl;
+		LOG.info("ACL Policy for S3 put object operations set.");
+	}
+
+	/**
+	 * Sets an ACL Policy for S3 to be applied with PutObject operations.
+	 *
+	 * @param s3Acl
+	 * 				ACL Policy to apply when putting a large object in S3
+	 */
+	public ExtendedClientConfiguration withS3ACL(AccessControlList s3Acl) {
+		setS3Acl(s3Acl);
+		return this;
+	}
+
+	/**
+	 * Gets S3 ACL Policy configured
+	 *
+	 * @return ACL Policy configured
+	 *         S3. Default: Null.
+	 */
+	public AccessControlList getS3Acl() {
+		return acl;
+	}
+
+
+	/**
+	 * Sets a Canned ACL Policy for S3 to be applied with PutObject operations.
+	 *
+	 * @param s3CannedAcl
+	 * 				ACL Policy to apply when putting a large object in S3
+	 */
+	public void setS3CannedAcl(CannedAccessControlList s3CannedAcl) {
+		cannedAcl = s3CannedAcl;
+		LOG.info("ACL Policy for S3 put object operations set.");
+	}
+
+	/**
+	 * Sets a Canned ACL Policy for S3 to be applied with PutObject operations.
+	 *
+	 * @param s3CannedAcl
+	 * 				ACL Policy to apply when putting a large object in S3
+	 */
+	public ExtendedClientConfiguration withS3CannedACL(CannedAccessControlList s3CannedAcl) {
+		setS3CannedAcl(s3CannedAcl);
+		return this;
+	}
+
+	/**
+	 * Gets S3 Canned ACL Policy configured
+	 *
+	 * @return ACL Canned Policy configured
+	 *         S3. Default: Null.
+	 */
+	public CannedAccessControlList getS3CannedAcl() {
+		return cannedAcl;
+	}
+
 }
