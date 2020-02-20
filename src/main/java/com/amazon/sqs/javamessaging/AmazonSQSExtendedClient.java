@@ -1335,7 +1335,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		PutObjectRequest putObjectRequest = new PutObjectRequest(clientConfiguration.getS3BucketName(), s3Key,
 				messageContentStream, messageContentStreamMetadata);
 		try {
-			clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
+			PutObjectRequest clientModifiedPutRequest = clientConfiguration.getPutObjectModifier().apply(putObjectRequest);
+			clientConfiguration.getAmazonS3Client().putObject(clientModifiedPutRequest);
 		} catch (AmazonServiceException e) {
 			String errorMessage = "Failed to store the message content in an S3 object. SQS message was not sent.";
 			LOG.error(errorMessage, e);

@@ -15,6 +15,7 @@
 
 package com.amazon.sqs.javamessaging;
 
+import com.amazonaws.internal.SdkFunction;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import junit.framework.Assert;
@@ -32,7 +33,6 @@ public class ExtendedClientConfigurationTest {
 
     @Before
     public void setup() {
-
     }
 
     @Test
@@ -116,5 +116,49 @@ public class ExtendedClientConfigurationTest {
 
     }
 
+    @Test
+    public void identityFunction_doesNotModifyInput()
+    {
+        ExtendedClientConfiguration.PutObjectRequestIdentityFunction identityFunction = new ExtendedClientConfiguration.PutObjectRequestIdentityFunction();
+        PutObjectRequest inputRequest = mock(PutObjectRequest.class);
+        PutObjectRequest outputRequest = identityFunction.apply(inputRequest);
+        Assert.assertSame(inputRequest, outputRequest);
+        verifyZeroInteractions(inputRequest);
+    }
 
+    @Test
+    public void noPutObjectFunctionDefined_useIdentity()
+    {
+        ExtendedClientConfiguration configuration = new ExtendedClientConfiguration();
+        Assert.assertEquals(configuration.getPutObjectModifier().getClass(), ExtendedClientConfiguration.PutObjectRequestIdentityFunction.class);
+    }
+
+    @Test
+    public void testPutObjectFunctionSetter()
+    {
+        ExtendedClientConfiguration configuration = new ExtendedClientConfiguration();
+        SdkFunction<PutObjectRequest, PutObjectRequest> modifierFunction = new SdkFunction<PutObjectRequest, PutObjectRequest>() {
+            @Override
+            public PutObjectRequest apply(PutObjectRequest putObjectRequest) {
+                return null;
+            }
+        };
+
+        configuration.setPutObjectModifier(modifierFunction);
+        Assert.assertEquals(configuration.getPutObjectModifier(), modifierFunction);
+    }
+
+    @Test
+    public void testPutObjectFunctioFluentApi()
+    {
+        SdkFunction<PutObjectRequest, PutObjectRequest> modifierFunction = new SdkFunction<PutObjectRequest, PutObjectRequest>() {
+            @Override
+            public PutObjectRequest apply(PutObjectRequest putObjectRequest) {
+                return null;
+            }
+        };
+
+        ExtendedClientConfiguration configuration = new ExtendedClientConfiguration().withPutObjectModifier(modifierFunction);
+        Assert.assertEquals(configuration.getPutObjectModifier(), modifierFunction);
+    }
 }

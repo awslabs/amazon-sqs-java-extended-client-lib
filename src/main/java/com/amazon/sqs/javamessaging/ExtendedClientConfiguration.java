@@ -16,12 +16,12 @@
 package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.internal.SdkFunction;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import com.amazonaws.annotation.NotThreadSafe;
-
-import java.util.List;
 
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
@@ -36,6 +36,7 @@ public class ExtendedClientConfiguration {
 	private boolean largePayloadSupport = false;
 	private boolean alwaysThroughS3 = false;
 	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
+	private SdkFunction<PutObjectRequest, PutObjectRequest> putObjectModifier = new PutObjectRequestIdentityFunction();
 
 	public ExtendedClientConfiguration() {
 		s3 = null;
@@ -48,6 +49,7 @@ public class ExtendedClientConfiguration {
 		this.largePayloadSupport = other.largePayloadSupport;
 		this.alwaysThroughS3 = other.alwaysThroughS3;
 		this.messageSizeThreshold = other.messageSizeThreshold;
+		this.putObjectModifier = other.putObjectModifier;
 	}
 
 	/**
@@ -213,5 +215,46 @@ public class ExtendedClientConfiguration {
 	 */
 	public boolean isAlwaysThroughS3() {
 		return alwaysThroughS3;
+	}
+
+	/**
+	 * Sets the function which you can use to modify the PutObjectRequest to enable support for encryption headers,
+	 * meta-data, etc.
+	 *
+	 * @param putObjectModifier
+	 *            An implementation of the internal SdkFunction which takes a PutObjectRequest, modifies it, and returns it.
+	 */
+	public void setPutObjectModifier(SdkFunction<PutObjectRequest, PutObjectRequest> putObjectModifier)
+	{
+		this.putObjectModifier = putObjectModifier;
+	}
+
+	/**
+	 * Sets the function which you can use to modify the PutObjectRequest to enable support for encryption headers,
+	 * meta-data, etc.
+	 *
+	 * @param putObjectModifier
+	 *            An implementation of the internal SdkFunction which takes a PutObjectRequest, modifies it, and returns it.
+	 */
+	public ExtendedClientConfiguration withPutObjectModifier(SdkFunction<PutObjectRequest, PutObjectRequest> putObjectModifier) {
+		this.setPutObjectModifier(putObjectModifier);
+		return this;
+	}
+
+	/**
+	 * Used to return the function which modifies the PutObjectRequests
+	 *
+	 * @return The custom configured SdkFunction or an identity function by default.
+	 *         stored in Amazon S3. Default: false
+	 */
+	public SdkFunction<PutObjectRequest, PutObjectRequest> getPutObjectModifier() {
+		return putObjectModifier;
+	}
+
+	static class PutObjectRequestIdentityFunction implements SdkFunction<PutObjectRequest, PutObjectRequest> {
+		@Override
+		public PutObjectRequest apply(PutObjectRequest putObjectRequest) {
+			return putObjectRequest;
+		}
 	}
 }
