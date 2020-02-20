@@ -24,11 +24,14 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.services.s3.model.AccessControlList;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
@@ -1328,12 +1331,27 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return s3PointerStr;
 	}
 
+	private void addAcl(PutObjectRequest request) {
+		// Add ACLs in request if provided in configuration.
+		AccessControlList acl = clientConfiguration.getS3Acl();
+		if (null != acl) {
+			request.setAccessControlList(acl);
+		}
+
+		CannedAccessControlList cannedAcl = clientConfiguration.getS3CannedAcl();
+		if (null != cannedAcl) {
+			request.setCannedAcl(cannedAcl);
+		}
+	}
+
 	private void storeTextInS3(String s3Key, String messageContentStr, Long messageContentSize) {
 		InputStream messageContentStream = new ByteArrayInputStream(messageContentStr.getBytes(StandardCharsets.UTF_8));
 		ObjectMetadata messageContentStreamMetadata = new ObjectMetadata();
 		messageContentStreamMetadata.setContentLength(messageContentSize);
 		PutObjectRequest putObjectRequest = new PutObjectRequest(clientConfiguration.getS3BucketName(), s3Key,
 				messageContentStream, messageContentStreamMetadata);
+		addAcl(putObjectRequest); // Add any ACL policy that might been set in the config to the request.
+
 		try {
 			clientConfiguration.getAmazonS3Client().putObject(putObjectRequest);
 		} catch (AmazonServiceException e) {

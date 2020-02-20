@@ -16,6 +16,8 @@
 package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AccessControlList;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import junit.framework.Assert;
 import org.junit.Before;
@@ -116,5 +118,31 @@ public class ExtendedClientConfigurationTest {
 
     }
 
+    @Test
+    public void testS3ACL() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
 
+        Assert.assertNull(extendedClientConfiguration.getS3Acl());
+        AccessControlList acl = new AccessControlList();
+        extendedClientConfiguration.setS3Acl(acl);
+        Assert.assertEquals(acl, extendedClientConfiguration.getS3Acl());
+
+        extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withS3ACL(acl);
+        Assert.assertEquals(acl, extendedClientConfiguration.getS3Acl());
+    }
+
+    @Test
+    public void testS3CannedACL() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        Assert.assertNull(extendedClientConfiguration.getS3Acl());
+        CannedAccessControlList acl = CannedAccessControlList.BucketOwnerFullControl;
+        extendedClientConfiguration.setS3CannedAcl(acl);
+        Assert.assertEquals(acl, extendedClientConfiguration.getS3CannedAcl());
+
+        extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withS3CannedACL(acl);
+        Assert.assertEquals(acl, extendedClientConfiguration.getS3CannedAcl());
+    }
 }

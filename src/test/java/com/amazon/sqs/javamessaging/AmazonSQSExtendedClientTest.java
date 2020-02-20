@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AccessControlList;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
@@ -224,6 +226,26 @@ public class AmazonSQSExtendedClientTest {
         Assert.assertEquals(messageLength, (int)Integer.valueOf(attributes.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME).getStringValue()));
     }
 
+    @Test
+    public void testACLsAreAddedToRequestIfSetInConfig() {
+        AccessControlList acl = new AccessControlList();
+        ExtendedClientConfiguration config = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withAlwaysThroughS3(true)
+                .withS3CannedACL(CannedAccessControlList.BucketOwnerFullControl)
+                .withS3ACL(acl);
+
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), config));
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, "someBody");
+        sqsExtended.sendMessage(messageRequest);
+
+        ArgumentCaptor<PutObjectRequest> putObjectRequestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3).putObject(putObjectRequestCaptor.capture());
+        PutObjectRequest captured = putObjectRequestCaptor.getValue();
+        Assert.assertEquals(acl, captured.getAccessControlList());
+        Assert.assertEquals(CannedAccessControlList.BucketOwnerFullControl, captured.getCannedAcl());
+
+    }
     private String generateStringWithLength(int messageLength) {
         char[] charArray = new char[messageLength];
         Arrays.fill(charArray, 'x');
