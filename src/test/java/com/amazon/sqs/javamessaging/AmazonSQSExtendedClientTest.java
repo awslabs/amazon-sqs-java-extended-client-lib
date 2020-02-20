@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import com.amazonaws.internal.SdkFunction;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -34,8 +35,14 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
@@ -48,11 +55,13 @@ import static org.mockito.Mockito.when;
 /**
  * Tests the AmazonSQSExtendedClient class.
  */
+@RunWith(MockitoJUnitRunner.class)
 public class AmazonSQSExtendedClientTest {
 
     private AmazonSQS extendedSqsWithDefaultConfig;
-    private AmazonSQS mockSqsBackend;
-    private AmazonS3 mockS3;
+    @Mock private AmazonSQS mockSqsBackend;
+    @Mock private AmazonS3 mockS3;
+    @Mock private SdkFunction<PutObjectRequest, PutObjectRequest> mockModificationFunction;
     private static final String S3_BUCKET_NAME = "test-bucket-name";
     private static final String SQS_QUEUE_URL = "test-queue-url";
 
@@ -65,12 +74,19 @@ public class AmazonSQSExtendedClientTest {
 
     @Before
     public void setupClient() {
-        mockS3 = mock(AmazonS3.class);
-        mockSqsBackend = mock(AmazonSQS.class);
         when(mockS3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
+        when(mockModificationFunction.apply(any(PutObjectRequest.class))).thenAnswer(new Answer<PutObjectRequest>()
+        {
+            @Override
+            public PutObjectRequest answer(InvocationOnMock invocationOnMock) {
+                return (PutObjectRequest) invocationOnMock.getArguments()[0];
+            }
+        });
+
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withPutObjectModifier(mockModificationFunction);
 
         extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
 
@@ -84,6 +100,7 @@ public class AmazonSQSExtendedClientTest {
         extendedSqsWithDefaultConfig.sendMessage(messageRequest);
 
         verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+        verify(mockModificationFunction, times(1)).apply(any(PutObjectRequest.class));
     }
 
     @Test
@@ -95,6 +112,7 @@ public class AmazonSQSExtendedClientTest {
         extendedSqsWithDefaultConfig.sendMessage(messageRequest);
 
         verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+        verify(mockModificationFunction, never()).apply(any(PutObjectRequest.class));
     }
 
     @Test
@@ -117,13 +135,16 @@ public class AmazonSQSExtendedClientTest {
         int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
         String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withAlwaysThroughS3(true)
+                .withPutObjectModifier(mockModificationFunction);
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
 
         verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+        verify(mockModificationFunction, times(1)).apply(any(PutObjectRequest.class));
     }
 
     @Test
@@ -131,13 +152,16 @@ public class AmazonSQSExtendedClientTest {
         int messageLength = ARBITRATY_SMALLER_THRESSHOLD * 2;
         String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMessageSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD)
+                .withPutObjectModifier(mockModificationFunction);
 
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
         verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+        verify(mockModificationFunction, times(1)).apply(any(PutObjectRequest.class));
     }
 
     @Test
@@ -191,6 +215,7 @@ public class AmazonSQSExtendedClientTest {
 
         // There should be 8 puts for the 8 messages above the threshhold
         verify(mockS3, times(8)).putObject(isA(PutObjectRequest.class));
+        verify(mockModificationFunction, times(8)).apply(any(PutObjectRequest.class));
     }
 
     @Test
