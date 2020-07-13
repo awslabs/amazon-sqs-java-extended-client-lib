@@ -1,5 +1,11 @@
 Amazon SQS Extended Client Library for Java
 ===========================================
+
+Since Amazon decided they did not want to work on an extended Async version, and there is not much traction from spring-cloud-aws to add support for it. Here are some changes from me for the extended lib with Async support. 
+
+ * https://github.com/awslabs/amazon-sqs-java-extended-client-lib/issues/5
+ * https://github.com/spring-cloud/spring-cloud-aws/issues/167
+
 The **Amazon SQS Extended Client Library for Java** enables you to manage Amazon SQS message payloads with Amazon S3. This is especially useful for storing and retrieving messages with a message payload size greater than the current SQS limit of 256 KB, up to a maximum of 2 GB. Specifically, you can use this library to:
 
 * Specify whether message payloads are always stored in Amazon S3 or only when a message's size exceeds 256 KB.
