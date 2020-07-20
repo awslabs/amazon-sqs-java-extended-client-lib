@@ -18,8 +18,6 @@ package com.amazon.sqs.javamessaging;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -70,6 +68,10 @@ import com.amazonaws.util.IOUtils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import software.amazon.payloadoffloading.PayloadS3Pointer;
+import software.amazon.payloadoffloading.PayloadStorageConfiguration;
+
+import static software.amazon.payloadoffloading.Util.getStringSizeInBytes;
 
 /**
  * Amazon SQS Extended Client extends the functionality of Amazon SQS client.
@@ -93,7 +95,7 @@ import org.apache.commons.logging.LogFactory;
 public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase implements AmazonSQS {
 	private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClient.class);
 
-	private ExtendedClientConfiguration clientConfiguration;
+	private PayloadStorageConfiguration clientConfiguration;
 
 	/**
 	 * Constructs a new Amazon SQS extended client to invoke service methods on
@@ -108,7 +110,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *            The Amazon SQS client to use to connect to Amazon SQS.
 	 */
 	public AmazonSQSExtendedClient(AmazonSQS sqsClient) {
-		this(sqsClient, new ExtendedClientConfiguration());
+		this(sqsClient, new PayloadStorageConfiguration().withPayloadSizeThreshold(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD));
 	}
 
 	/**
@@ -122,13 +124,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *
 	 * @param sqsClient
 	 *            The Amazon SQS client to use to connect to Amazon SQS.
-	 * @param extendedClientConfig
-	 *            The extended client configuration options controlling the
+	 * @param payloadStorageConfiguration
+	 *            The payload storage configuration options controlling the
 	 *            functionality of this client.
 	 */
-	public AmazonSQSExtendedClient(AmazonSQS sqsClient, ExtendedClientConfiguration extendedClientConfig) {
+	public AmazonSQSExtendedClient(AmazonSQS sqsClient, PayloadStorageConfiguration payloadStorageConfiguration) {
 		super(sqsClient);
-		this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
+		if (payloadStorageConfiguration.getPayloadSizeThreshold() == 0) {
+			payloadStorageConfiguration.setPayloadSizeThreshold(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD);
+		}
+		this.clientConfiguration = new PayloadStorageConfiguration(payloadStorageConfiguration);
 	}
 
 	/**
@@ -175,7 +180,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		sendMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.sendMessage(sendMessageRequest);
 		}
 
@@ -340,7 +345,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		receiveMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.receiveMessage(receiveMessageRequest);
 		}
 
@@ -360,7 +365,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				String messageBody = message.getBody();
 
 				// read the S3 pointer from the message body JSON string.
-				MessageS3Pointer s3Pointer = readMessageS3PointerFromJSON(messageBody);
+				PayloadS3Pointer s3Pointer = PayloadS3Pointer.fromJson(messageBody);
 
 				String s3MsgBucketName = s3Pointer.getS3BucketName();
 				String s3MsgKey = s3Pointer.getS3Key();
@@ -546,7 +551,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		deleteMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.deleteMessage(deleteMessageRequest);
 		}
 
@@ -769,7 +774,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		sendMessageBatchRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.sendMessageBatch(sendMessageBatchRequest);
 		}
 
@@ -907,7 +912,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(
 				SQSExtendedClientConstants.USER_AGENT_HEADER);
 
-		if (!clientConfiguration.isLargePayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.deleteMessageBatch(deleteMessageBatchRequest);
 		}
 
@@ -1117,9 +1122,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 	private void checkMessageAttributes(Map<String, MessageAttributeValue> messageAttributes) {
 		int msgAttributesSize = getMsgAttributesSize(messageAttributes);
-		if (msgAttributesSize > clientConfiguration.getMessageSizeThreshold()) {
+		if (msgAttributesSize > clientConfiguration.getPayloadSizeThreshold()) {
 			String errorMessage = "Total size of Message attributes is " + msgAttributesSize
-					+ " bytes which is larger than the threshold of " + clientConfiguration.getMessageSizeThreshold()
+					+ " bytes which is larger than the threshold of " + clientConfiguration.getPayloadSizeThreshold()
 					+ " Bytes. Consider including the payload in the message body instead of message attributes.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
@@ -1150,20 +1155,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				+ SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
 				+ s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
 		return modifiedReceiptHandle;
-	}
-
-	private MessageS3Pointer readMessageS3PointerFromJSON(String messageBody) {
-
-		MessageS3Pointer s3Pointer = null;
-		try {
-			JsonDataConverter jsonDataConverter = new JsonDataConverter();
-			s3Pointer = jsonDataConverter.deserializeFromJson(messageBody, MessageS3Pointer.class);
-		} catch (Exception e) {
-			String errorMessage = "Failed to read the S3 object pointer from an SQS message. Message was not received.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
-		return s3Pointer;
 	}
 
 	private String getOrigReceiptHandle(String receiptHandle) {
@@ -1215,14 +1206,14 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(sendMessageRequest.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > clientConfiguration.getMessageSizeThreshold());
+		return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
 	}
 
 	private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
 		int msgAttributesSize = getMsgAttributesSize(batchEntry.getMessageAttributes());
 		long msgBodySize = getStringSizeInBytes(batchEntry.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > clientConfiguration.getMessageSizeThreshold());
+		return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
 	}
 
 	private int getMsgAttributesSize(Map<String, MessageAttributeValue> msgAttributes) {
@@ -1272,8 +1263,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				+ ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
-		String s3PointerStr = getJSONFromS3Pointer(s3Pointer);
+		PayloadS3Pointer s3Pointer = new PayloadS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
+		String s3PointerStr = s3Pointer.toJson();
 
 		// Storing S3 pointer in the message body.
 		batchEntry.setMessageBody(s3PointerStr);
@@ -1305,27 +1296,14 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				+ ".");
 
 		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		MessageS3Pointer s3Pointer = new MessageS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
+		PayloadS3Pointer s3Pointer = new PayloadS3Pointer(clientConfiguration.getS3BucketName(), s3Key);
 
-		String s3PointerStr = getJSONFromS3Pointer(s3Pointer);
+		String s3PointerStr = s3Pointer.toJson();
 
 		// Storing S3 pointer in the message body.
 		sendMessageRequest.setMessageBody(s3PointerStr);
 
 		return sendMessageRequest;
-	}
-
-	private String getJSONFromS3Pointer(MessageS3Pointer s3Pointer) {
-		String s3PointerStr = null;
-		try {
-			JsonDataConverter jsonDataConverter = new JsonDataConverter();
-			s3PointerStr = jsonDataConverter.serializeToJson(s3Pointer);
-		} catch (Exception e) {
-			String errorMessage = "Failed to convert S3 object pointer to text. Message was not sent.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
-		return s3PointerStr;
 	}
 
 	private void storeTextInS3(String s3Key, String messageContentStr, Long messageContentSize) {
@@ -1345,21 +1323,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			LOG.error(errorMessage, e);
 			throw new AmazonClientException(errorMessage, e);
 		}
-	}
-
-	private static long getStringSizeInBytes(String str) {
-		CountingOutputStream counterOutputStream = new CountingOutputStream();
-		try {
-			Writer writer = new OutputStreamWriter(counterOutputStream, "UTF-8");
-			writer.write(str);
-			writer.flush();
-			writer.close();
-		} catch (IOException e) {
-			String errorMessage = "Failed to calculate the size of message payload.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
-		return counterOutputStream.getTotalSize();
 	}
 
 }

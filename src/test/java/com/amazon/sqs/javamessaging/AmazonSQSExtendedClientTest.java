@@ -35,6 +35,7 @@ import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import software.amazon.payloadoffloading.PayloadStorageConfiguration;
 
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.isA;
@@ -69,10 +70,10 @@ public class AmazonSQSExtendedClientTest {
         mockSqsBackend = mock(AmazonSQS.class);
         when(mockS3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+        PayloadStorageConfiguration payloadStorageConfiguration = new PayloadStorageConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
 
-        extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, payloadStorageConfiguration));
 
     }
 
@@ -101,9 +102,9 @@ public class AmazonSQSExtendedClientTest {
     public void testWhenSendMessageWithLargePayloadSupportDisabledThenS3IsNotUsedAndSqsBackendIsResponsibleToFailIt() {
         int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
         String messageBody = generateStringWithLength(messageLength);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportDisabled();
-        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        PayloadStorageConfiguration payloadStorageConfiguration = new PayloadStorageConfiguration()
+                .withPayloadSupportDisabled();
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, payloadStorageConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
@@ -116,9 +117,9 @@ public class AmazonSQSExtendedClientTest {
     public void testWhenSendMessageWithAlwaysThroughS3AndMessageIsSmallThenItIsStillStoredInS3() {
         int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
         String messageBody = generateStringWithLength(messageLength);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
-        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+        PayloadStorageConfiguration payloadStorageConfiguration = new PayloadStorageConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), payloadStorageConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
@@ -127,13 +128,13 @@ public class AmazonSQSExtendedClientTest {
     }
 
     @Test
-    public void testWhenSendMessageWithSetMessageSizeThresholdThenThresholdIsHonored() {
+    public void testWhenSendMessageWithSetPayloadSizeThresholdThenThresholdIsHonored() {
         int messageLength = ARBITRATY_SMALLER_THRESSHOLD * 2;
         String messageBody = generateStringWithLength(messageLength);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
+        PayloadStorageConfiguration payloadStorageConfiguration = new PayloadStorageConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withPayloadSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
 
-        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), payloadStorageConfiguration));
 
         SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
         sqsExtended.sendMessage(messageRequest);
@@ -142,9 +143,9 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testReceiveMessageMultipleTimesDoesNotAdditionallyAlterReceiveMessageRequest() {
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
-        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        PayloadStorageConfiguration payloadStorageConfiguration = new PayloadStorageConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, payloadStorageConfiguration));
         when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(new ReceiveMessageResult());
 
         ReceiveMessageRequest messageRequest = new ReceiveMessageRequest();

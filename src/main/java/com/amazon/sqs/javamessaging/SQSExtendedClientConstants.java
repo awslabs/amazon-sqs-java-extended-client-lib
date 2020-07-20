@@ -17,7 +17,7 @@ package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.util.VersionInfoUtils;
 
-class SQSExtendedClientConstants {
+public class SQSExtendedClientConstants {
 	public static final String RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
 	public static final int MAX_ALLOWED_ATTRIBUTES = 10 - 1; // 10 for SQS, 1 for the reserved attribute
 	public static final int DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144;
