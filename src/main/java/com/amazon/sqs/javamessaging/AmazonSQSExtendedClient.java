@@ -15,23 +15,12 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
 import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
@@ -64,14 +53,11 @@ import com.amazonaws.services.sqs.model.SendMessageBatchResult;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
-import com.amazonaws.util.IOUtils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import software.amazon.payloadoffloading.PayloadS3Pointer;
-import software.amazon.payloadoffloading.PayloadStorageConfiguration;
+import software.amazon.payloadoffloading.*;
 
-import static software.amazon.payloadoffloading.Util.getStringSizeInBytes;
 
 /**
  * Amazon SQS Extended Client extends the functionality of Amazon SQS client.
@@ -94,8 +80,12 @@ import static software.amazon.payloadoffloading.Util.getStringSizeInBytes;
  */
 public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase implements AmazonSQS {
 	private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClient.class);
-
-	private PayloadStorageConfiguration payloadConfiguration;
+	private static final String USER_AGENT_HEADER = Util.getUserAgentHeader(AmazonSQSExtendedClient.class.getSimpleName());
+	static final String LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
+	static final List<String> RESERVED_ATTRIBUTE_NAMES = Arrays.asList(LEGACY_RESERVED_ATTRIBUTE_NAME,
+			SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+	private ExtendedClientConfiguration clientConfiguration;
+	private PayloadStore payloadStore;
 
 	/**
 	 * Constructs a new Amazon SQS extended client to invoke service methods on
@@ -110,7 +100,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *            The Amazon SQS client to use to connect to Amazon SQS.
 	 */
 	public AmazonSQSExtendedClient(AmazonSQS sqsClient) {
-		this(sqsClient, new PayloadStorageConfiguration().withPayloadSizeThreshold(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD));
+		this(sqsClient, new ExtendedClientConfiguration());
 	}
 
 	/**
@@ -124,16 +114,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *
 	 * @param sqsClient
 	 *            The Amazon SQS client to use to connect to Amazon SQS.
-	 * @param payloadStorageConfiguration
-	 *            The payload storage configuration options controlling the
+	 * @param extendedClientConfig
+	 *            The extended client configuration options controlling the
 	 *            functionality of this client.
 	 */
-	public AmazonSQSExtendedClient(AmazonSQS sqsClient, PayloadStorageConfiguration payloadStorageConfiguration) {
+	public AmazonSQSExtendedClient(AmazonSQS sqsClient, ExtendedClientConfiguration extendedClientConfig) {
 		super(sqsClient);
-		if (payloadStorageConfiguration.getPayloadSizeThreshold() == 0) {
-			payloadStorageConfiguration.setPayloadSizeThreshold(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD);
-		}
-		this.payloadConfiguration = new PayloadStorageConfiguration(payloadStorageConfiguration);
+		this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
+		S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client());
+		this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName(),
+				clientConfiguration.getSSEAwsKeyManagementParams());
 	}
 
 	/**
@@ -171,16 +161,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             side issue.
 	 */
 	public SendMessageResult sendMessage(SendMessageRequest sendMessageRequest) {
-
+		//TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
 		if (sendMessageRequest == null) {
 			String errorMessage = "sendMessageRequest cannot be null.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
 
-		sendMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
+		sendMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
-		if (!payloadConfiguration.isPayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.sendMessage(sendMessageRequest);
 		}
 
@@ -190,7 +180,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		if (payloadConfiguration.isAlwaysThroughS3() || isLarge(sendMessageRequest)) {
+		//Check message attributes for ExtendedClient related constraints
+		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
+
+		if (clientConfiguration.isAlwaysThroughS3() || isLarge(sendMessageRequest)) {
 			sendMessageRequest = storeMessageInS3(sendMessageRequest);
 		}
 		return super.sendMessage(sendMessageRequest);
@@ -336,22 +329,21 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 *             side issue.
 	 */
 	public ReceiveMessageResult receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
-
+		//TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
 		if (receiveMessageRequest == null) {
 			String errorMessage = "receiveMessageRequest cannot be null.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
 
-		receiveMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
+		receiveMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
-		if (!payloadConfiguration.isPayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.receiveMessage(receiveMessageRequest);
 		}
-
-                if (!receiveMessageRequest.getMessageAttributeNames().contains(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME)) {
-		        receiveMessageRequest.getMessageAttributeNames().add(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
-                }
+		//Remove before adding to avoid any duplicates
+		receiveMessageRequest.getMessageAttributeNames().removeAll(RESERVED_ATTRIBUTE_NAMES);
+		receiveMessageRequest.getMessageAttributeNames().addAll(RESERVED_ATTRIBUTE_NAMES);
 
 		ReceiveMessageResult receiveMessageResult = super.receiveMessage(receiveMessageRequest);
 
@@ -359,29 +351,20 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		for (Message message : messages) {
 
 			// for each received message check if they are stored in S3.
-			MessageAttributeValue largePayloadAttributeValue = message.getMessageAttributes().get(
-					SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
-			if (largePayloadAttributeValue != null) {
-				String messageBody = message.getBody();
+			Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.getMessageAttributes());
+			if (largePayloadAttributeName.isPresent()) {
+				String largeMessagePointer = message.getBody();
 
-				// read the S3 pointer from the message body JSON string.
-				PayloadS3Pointer s3Pointer = PayloadS3Pointer.fromJson(messageBody);
-
-				String s3MsgBucketName = s3Pointer.getS3BucketName();
-				String s3MsgKey = s3Pointer.getS3Key();
-
-				String origMsgBody = getTextFromS3(s3MsgBucketName, s3MsgKey);
-				LOG.info("S3 object read, Bucket name: " + s3MsgBucketName + ", Object key: " + s3MsgKey + ".");
-
-				message.setBody(origMsgBody);
+				message.setBody(payloadStore.getOriginalPayload(largeMessagePointer));
 
 				// remove the additional attribute before returning the message
 				// to user.
-				message.getMessageAttributes().remove(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+				message.getMessageAttributes().keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
 
 				// Embed s3 object pointer in the receipt handle.
-				String modifiedReceiptHandle = embedS3PointerInReceiptHandle(message.getReceiptHandle(),
-						s3MsgBucketName, s3MsgKey);
+				String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
+						message.getReceiptHandle(),
+						largeMessagePointer);
 
 				message.setReceiptHandle(modifiedReceiptHandle);
 			}
@@ -549,18 +532,25 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		deleteMessageRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
+		deleteMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
-		if (!payloadConfiguration.isPayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.deleteMessage(deleteMessageRequest);
 		}
 
 		String receiptHandle = deleteMessageRequest.getReceiptHandle();
 		String origReceiptHandle = receiptHandle;
+
+		// Update original receipt handle if needed
 		if (isS3ReceiptHandle(receiptHandle)) {
-			deleteMessagePayloadFromS3(receiptHandle);
 			origReceiptHandle = getOrigReceiptHandle(receiptHandle);
+			// Delete pay load from S3 if needed
+			if (clientConfiguration.doesCleanupS3Payload()) {
+				String messagePointer = getMessagePointerFromModifiedReceiptHandle(receiptHandle);
+				payloadStore.deleteOriginalPayload(messagePointer);
+			}
 		}
+
 		deleteMessageRequest.setReceiptHandle(origReceiptHandle);
 		return super.deleteMessage(deleteMessageRequest);
 	}
@@ -626,8 +616,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	 * @see #changeMessageVisibility(ChangeMessageVisibilityRequest)
 	 */
 	public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl,
-	                                                             String receiptHandle,
-	                                                             Integer visibilityTimeout) {
+																 String receiptHandle,
+																 Integer visibilityTimeout) {
 		ChangeMessageVisibilityRequest changeMessageVisibilityRequest =
 				new ChangeMessageVisibilityRequest(queueUrl, receiptHandle, visibilityTimeout);
 		return changeMessageVisibility(changeMessageVisibilityRequest);
@@ -772,9 +762,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		sendMessageBatchRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
+		sendMessageBatchRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
-		if (!payloadConfiguration.isPayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.sendMessageBatch(sendMessageBatchRequest);
 		}
 
@@ -782,7 +772,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 		int index = 0;
 		for (SendMessageBatchRequestEntry entry : batchEntries) {
-			if (payloadConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
+			//Check message attributes for ExtendedClient related constraints
+			checkMessageAttributes(entry.getMessageAttributes());
+
+			if (clientConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
 				batchEntries.set(index, storeMessageInS3(entry));
 			}
 			++index;
@@ -909,20 +902,26 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(
-				SQSExtendedClientConstants.USER_AGENT_HEADER);
+		deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
-		if (!payloadConfiguration.isPayloadSupportEnabled()) {
+		if (!clientConfiguration.isPayloadSupportEnabled()) {
 			return super.deleteMessageBatch(deleteMessageBatchRequest);
 		}
 
 		for (DeleteMessageBatchRequestEntry entry : deleteMessageBatchRequest.getEntries()) {
 			String receiptHandle = entry.getReceiptHandle();
 			String origReceiptHandle = receiptHandle;
+
+			// Update original receipt handle if needed
 			if (isS3ReceiptHandle(receiptHandle)) {
-				deleteMessagePayloadFromS3(receiptHandle);
 				origReceiptHandle = getOrigReceiptHandle(receiptHandle);
+				// Delete s3 payload if needed
+				if (clientConfiguration.doesCleanupS3Payload()) {
+					String messagePointer = getMessagePointerFromModifiedReceiptHandle(receiptHandle);
+					payloadStore.deleteOriginalPayload(messagePointer);
+				}
 			}
+
 			entry.setReceiptHandle(origReceiptHandle);
 		}
 		return super.deleteMessageBatch(deleteMessageBatchRequest);
@@ -1052,41 +1051,41 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 		return amazonSqsToBeExtended.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
 	}
 
-    /**
-     * <p>
-     * Deletes the messages in a queue specified by the <b>queue URL</b> .
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
-     * the queue cannot be retrieved.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> This does not delete the message payloads from Amazon S3.
-     * </p>
-     * <p>
-     * When you purge a queue, the message deletion process takes up to 60
-     * seconds. All messages sent to the queue before calling
-     * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
-     * it is being purged may be deleted. While the queue is being purged,
-     * messages sent to the queue before <code>PurgeQueue</code> was called may
-     * be received, but will be deleted within the next minute.
-     * </p>
-     *
-     * @param purgeQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            PurgeQueue service method on AmazonSQS.
-     * @return The response from the PurgeQueue service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
+	/**
+	 * <p>
+	 * Deletes the messages in a queue specified by the <b>queue URL</b> .
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
+	 * the queue cannot be retrieved.
+	 * </p>
+	 * <p>
+	 * <b>IMPORTANT:</b> This does not delete the message payloads from Amazon S3.
+	 * </p>
+	 * <p>
+	 * When you purge a queue, the message deletion process takes up to 60
+	 * seconds. All messages sent to the queue before calling
+	 * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
+	 * it is being purged may be deleted. While the queue is being purged,
+	 * messages sent to the queue before <code>PurgeQueue</code> was called may
+	 * be received, but will be deleted within the next minute.
+	 * </p>
+	 *
+	 * @param purgeQueueRequest
+	 *            Container for the necessary parameters to execute the
+	 *            PurgeQueue service method on AmazonSQS.
+	 * @return The response from the PurgeQueue service method, as returned
+	 *         by AmazonSQS.
+	 *
+	 * @throws AmazonClientException
+	 *             If any internal errors are encountered inside the client
+	 *             while attempting to make the request or handle the response.
+	 *             For example if a network connection is not available.
+	 * @throws AmazonServiceException
+	 *             If an error response is returned by AmazonSQS indicating
+	 *             either a problem with the data in the request, or a server
+	 *             side issue.
+	 */
 	public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest)
 			throws AmazonServiceException, AmazonClientException {
 		LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
@@ -1097,34 +1096,16 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			throw new AmazonClientException(errorMessage);
 		}
 
-		purgeQueueRequest.getRequestClientOptions().appendUserAgent(SQSExtendedClientConstants.USER_AGENT_HEADER);
+		purgeQueueRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
 
 		return super.purgeQueue(purgeQueueRequest);
 	}
 
-	private void deleteMessagePayloadFromS3(String receiptHandle) {
-		String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle,
-				SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
-		String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
-		try {
-			payloadConfiguration.getAmazonS3Client().deleteObject(s3MsgBucketName, s3MsgKey);
-		} catch (AmazonServiceException e) {
-			String errorMessage = "Failed to delete the S3 object which contains the SQS message payload. SQS message was not deleted.";
-			LOG.error(errorMessage, e);
-			throw new AmazonServiceException(errorMessage, e);
-		} catch (AmazonClientException e) {
-			String errorMessage = "Failed to delete the S3 object which contains the SQS message payload. SQS message was not deleted.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
-		LOG.info("S3 object deleted, Bucket name: " + s3MsgBucketName + ", Object key: " + s3MsgKey + ".");
-	}
-
 	private void checkMessageAttributes(Map<String, MessageAttributeValue> messageAttributes) {
 		int msgAttributesSize = getMsgAttributesSize(messageAttributes);
-		if (msgAttributesSize > payloadConfiguration.getPayloadSizeThreshold()) {
+		if (msgAttributesSize > clientConfiguration.getPayloadSizeThreshold()) {
 			String errorMessage = "Total size of Message attributes is " + msgAttributesSize
-					+ " bytes which is larger than the threshold of " + payloadConfiguration.getPayloadSizeThreshold()
+					+ " bytes which is larger than the threshold of " + clientConfiguration.getPayloadSizeThreshold()
 					+ " Bytes. Consider including the payload in the message body instead of message attributes.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
@@ -1138,19 +1119,25 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
+		Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(messageAttributes);
 
-		MessageAttributeValue largePayloadAttributeValue = messageAttributes
-				.get(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
-		if (largePayloadAttributeValue != null) {
-			String errorMessage = "Message attribute name " + SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME
+		if (largePayloadAttributeName.isPresent()) {
+			String errorMessage = "Message attribute name " + largePayloadAttributeName.get()
 					+ " is reserved for use by SQS extended client.";
 			LOG.error(errorMessage);
 			throw new AmazonClientException(errorMessage);
 		}
-
 	}
 
-	private String embedS3PointerInReceiptHandle(String receiptHandle, String s3MsgBucketName, String s3MsgKey) {
+	/**
+	 * TODO: Wrap the message pointer as-is to the receiptHandle so that it can be generic
+	 * and does not use any LargeMessageStore implementation specific details.
+	 */
+	private String embedS3PointerInReceiptHandle(String receiptHandle, String pointer) {
+		PayloadS3Pointer s3Pointer = PayloadS3Pointer.fromJson(pointer);
+		String s3MsgBucketName = s3Pointer.getS3BucketName();
+		String s3MsgKey = s3Pointer.getS3Key();
+
 		String modifiedReceiptHandle = SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
 				+ SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
 				+ s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
@@ -1174,61 +1161,51 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 				&& receiptHandle.contains(SQSExtendedClientConstants.S3_KEY_MARKER);
 	}
 
-	private String getTextFromS3(String s3BucketName, String s3Key) {
-		GetObjectRequest getObjectRequest = new GetObjectRequest(s3BucketName, s3Key);
-		String embeddedText = null;
-		S3Object obj = null;
-		try {
-			obj = payloadConfiguration.getAmazonS3Client().getObject(getObjectRequest);
-		} catch (AmazonServiceException e) {
-			String errorMessage = "Failed to get the S3 object which contains the message payload. Message was not received.";
-			LOG.error(errorMessage, e);
-			throw new AmazonServiceException(errorMessage, e);
-		} catch (AmazonClientException e) {
-			String errorMessage = "Failed to get the S3 object which contains the message payload. Message was not received.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
-		S3ObjectInputStream is = obj.getObjectContent();
-		try {
-			embeddedText = IOUtils.toString(is);
-		} catch (IOException e) {
-			String errorMessage = "Failure when handling the message which was read from S3 object. Message was not received.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		} finally {
-			IOUtils.closeQuietly(is, LOG);
-		}
-		return embeddedText;
+	private String getMessagePointerFromModifiedReceiptHandle(String receiptHandle) {
+		String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
+		String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
+
+		PayloadS3Pointer payloadS3Pointer = new PayloadS3Pointer(s3MsgBucketName, s3MsgKey);
+		return payloadS3Pointer.toJson();
 	}
 
 	private boolean isLarge(SendMessageRequest sendMessageRequest) {
 		int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.getMessageAttributes());
-		long msgBodySize = getStringSizeInBytes(sendMessageRequest.getMessageBody());
+		long msgBodySize = Util.getStringSizeInBytes(sendMessageRequest.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > payloadConfiguration.getPayloadSizeThreshold());
+		return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
 	}
 
 	private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
 		int msgAttributesSize = getMsgAttributesSize(batchEntry.getMessageAttributes());
-		long msgBodySize = getStringSizeInBytes(batchEntry.getMessageBody());
+		long msgBodySize = Util.getStringSizeInBytes(batchEntry.getMessageBody());
 		long totalMsgSize = msgAttributesSize + msgBodySize;
-		return (totalMsgSize > payloadConfiguration.getPayloadSizeThreshold());
+		return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
+	}
+
+	private Optional<String> getReservedAttributeNameIfPresent(Map<String, MessageAttributeValue> msgAttributes) {
+		String reservedAttributeName = null;
+		if (msgAttributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME)) {
+			reservedAttributeName = SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME;
+		} else if (msgAttributes.containsKey(LEGACY_RESERVED_ATTRIBUTE_NAME)) {
+			reservedAttributeName = LEGACY_RESERVED_ATTRIBUTE_NAME;
+		}
+		return Optional.ofNullable(reservedAttributeName);
 	}
 
 	private int getMsgAttributesSize(Map<String, MessageAttributeValue> msgAttributes) {
 		int totalMsgAttributesSize = 0;
 		for (Entry<String, MessageAttributeValue> entry : msgAttributes.entrySet()) {
-			totalMsgAttributesSize += getStringSizeInBytes(entry.getKey());
+			totalMsgAttributesSize += Util.getStringSizeInBytes(entry.getKey());
 
 			MessageAttributeValue entryVal = entry.getValue();
 			if (entryVal.getDataType() != null) {
-				totalMsgAttributesSize += getStringSizeInBytes(entryVal.getDataType());
+				totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.getDataType());
 			}
 
 			String stringVal = entryVal.getStringValue();
 			if (stringVal != null) {
-				totalMsgAttributesSize += getStringSizeInBytes(entryVal.getStringValue());
+				totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.getStringValue());
 			}
 
 			ByteBuffer binaryVal = entryVal.getBinaryValue();
@@ -1241,88 +1218,58 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
 	private SendMessageBatchRequestEntry storeMessageInS3(SendMessageBatchRequestEntry batchEntry) {
 
-		checkMessageAttributes(batchEntry.getMessageAttributes());
-
-		String s3Key = UUID.randomUUID().toString();
-
 		// Read the content of the message from message body
 		String messageContentStr = batchEntry.getMessageBody();
 
-		Long messageContentSize = getStringSizeInBytes(messageContentStr);
+		Long messageContentSize = Util.getStringSizeInBytes(messageContentStr);
 
 		// Add a new message attribute as a flag
 		MessageAttributeValue messageAttributeValue = new MessageAttributeValue();
 		messageAttributeValue.setDataType("Number");
 		messageAttributeValue.setStringValue(messageContentSize.toString());
-		batchEntry.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
+
+		if (!clientConfiguration.usesLegacyReservedAttributeName()) {
+			batchEntry.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
+					messageAttributeValue);
+		} else {
+			batchEntry.addMessageAttributesEntry(LEGACY_RESERVED_ATTRIBUTE_NAME,
+					messageAttributeValue);
+		}
 
 		// Store the message content in S3.
-		storeTextInS3(s3Key, messageContentStr, messageContentSize);
-
-		LOG.info("S3 object created, Bucket name: " + payloadConfiguration.getS3BucketName() + ", Object key: " + s3Key
-				+ ".");
-
-		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		PayloadS3Pointer s3Pointer = new PayloadS3Pointer(payloadConfiguration.getS3BucketName(), s3Key);
-		String s3PointerStr = s3Pointer.toJson();
-
-		// Storing S3 pointer in the message body.
-		batchEntry.setMessageBody(s3PointerStr);
+		String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
+				messageContentSize);
+		batchEntry.setMessageBody(largeMessagePointer);
 
 		return batchEntry;
 	}
 
 	private SendMessageRequest storeMessageInS3(SendMessageRequest sendMessageRequest) {
 
-		checkMessageAttributes(sendMessageRequest.getMessageAttributes());
-
-		String s3Key = UUID.randomUUID().toString();
-
 		// Read the content of the message from message body
 		String messageContentStr = sendMessageRequest.getMessageBody();
 
-		Long messageContentSize = getStringSizeInBytes(messageContentStr);
+		Long messageContentSize = Util.getStringSizeInBytes(messageContentStr);
 
 		// Add a new message attribute as a flag
 		MessageAttributeValue messageAttributeValue = new MessageAttributeValue();
 		messageAttributeValue.setDataType("Number");
 		messageAttributeValue.setStringValue(messageContentSize.toString());
-		sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
-				messageAttributeValue);
+
+		if (!clientConfiguration.usesLegacyReservedAttributeName()) {
+			sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
+					messageAttributeValue);
+		} else {
+			sendMessageRequest.addMessageAttributesEntry(LEGACY_RESERVED_ATTRIBUTE_NAME,
+					messageAttributeValue);
+		}
 
 		// Store the message content in S3.
-		storeTextInS3(s3Key, messageContentStr, messageContentSize);
-		LOG.info("S3 object created, Bucket name: " + payloadConfiguration.getS3BucketName() + ", Object key: " + s3Key
-				+ ".");
-
-		// Convert S3 pointer (bucket name, key, etc) to JSON string
-		PayloadS3Pointer s3Pointer = new PayloadS3Pointer(payloadConfiguration.getS3BucketName(), s3Key);
-
-		String s3PointerStr = s3Pointer.toJson();
-
-		// Storing S3 pointer in the message body.
-		sendMessageRequest.setMessageBody(s3PointerStr);
+		String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
+				messageContentSize);
+		sendMessageRequest.setMessageBody(largeMessagePointer);
 
 		return sendMessageRequest;
-	}
-
-	private void storeTextInS3(String s3Key, String messageContentStr, Long messageContentSize) {
-		InputStream messageContentStream = new ByteArrayInputStream(messageContentStr.getBytes(StandardCharsets.UTF_8));
-		ObjectMetadata messageContentStreamMetadata = new ObjectMetadata();
-		messageContentStreamMetadata.setContentLength(messageContentSize);
-		PutObjectRequest putObjectRequest = new PutObjectRequest(payloadConfiguration.getS3BucketName(), s3Key,
-				messageContentStream, messageContentStreamMetadata);
-		try {
-			payloadConfiguration.getAmazonS3Client().putObject(putObjectRequest);
-		} catch (AmazonServiceException e) {
-			String errorMessage = "Failed to store the message content in an S3 object. SQS message was not sent.";
-			LOG.error(errorMessage, e);
-			throw new AmazonServiceException(errorMessage, e);
-		} catch (AmazonClientException e) {
-			String errorMessage = "Failed to store the message content in an S3 object. SQS message was not sent.";
-			LOG.error(errorMessage, e);
-			throw new AmazonClientException(errorMessage, e);
-		}
 	}
 
 }
