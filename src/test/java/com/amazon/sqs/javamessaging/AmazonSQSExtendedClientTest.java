@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2010-2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.*;
 
 import com.amazonaws.util.StringInputStream;
-import junit.framework.Assert;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -58,7 +58,7 @@ public class AmazonSQSExtendedClientTest {
     private static final int MORE_THAN_SQS_SIZE_LIMIT = SQS_SIZE_LIMIT + 1;
 
     // should be > 1 and << SQS_SIZE_LIMIT
-    private static final int ARBITRATY_SMALLER_THRESSHOLD = 500;
+    private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
 
     @Before
     public void setupClients() {
@@ -106,8 +106,8 @@ public class AmazonSQSExtendedClientTest {
         ArgumentCaptor<PutObjectRequest> putObjectRequestArgumentCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(mockS3, times(1)).putObject(putObjectRequestArgumentCaptor.capture());
 
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams() == null);
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getBucketName().equals(S3_BUCKET_NAME));
+        Assert.assertNull(putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams());
+        Assert.assertEquals(putObjectRequestArgumentCaptor.getValue().getBucketName(), S3_BUCKET_NAME);
     }
 
     @Test
@@ -120,9 +120,9 @@ public class AmazonSQSExtendedClientTest {
         ArgumentCaptor<PutObjectRequest> putObjectRequestArgumentCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(mockS3, times(1)).putObject(putObjectRequestArgumentCaptor.capture());
 
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams()
-                .getAwsKmsKeyId().equals(S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID));
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getBucketName().equals(S3_BUCKET_NAME));
+        Assert.assertEquals(putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams()
+                .getAwsKmsKeyId(), S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID);
+        Assert.assertEquals(putObjectRequestArgumentCaptor.getValue().getBucketName(), S3_BUCKET_NAME);
     }
 
     @Test
@@ -137,7 +137,7 @@ public class AmazonSQSExtendedClientTest {
 
         Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams() != null &&
                 putObjectRequestArgumentCaptor.getValue().getSSEAwsKeyManagementParams().getAwsKmsKeyId() == null);
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().getBucketName().equals(S3_BUCKET_NAME));
+        Assert.assertEquals(putObjectRequestArgumentCaptor.getValue().getBucketName(), S3_BUCKET_NAME);
     }
 
     @Test
@@ -213,10 +213,10 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testWhenSendMessageWithSetMessageSizeThresholdThenThresholdIsHonored() {
-        int messageLength = ARBITRATY_SMALLER_THRESSHOLD * 2;
+        int messageLength = ARBITRARY_SMALLER_THRESHOLD * 2;
         String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withPayloadSizeThreshold(ARBITRATY_SMALLER_THRESSHOLD);
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withPayloadSizeThreshold(ARBITRARY_SMALLER_THRESHOLD);
 
         AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
 
@@ -300,7 +300,7 @@ public class AmazonSQSExtendedClientTest {
         SendMessageBatchRequest batchRequest = new SendMessageBatchRequest(SQS_QUEUE_URL, batchEntries);
         extendedSqsWithDefaultConfig.sendMessageBatch(batchRequest);
 
-        // There should be 8 puts for the 8 messages above the threshhold
+        // There should be 8 puts for the 8 messages above the threshold
         verify(mockS3, times(8)).putObject(isA(PutObjectRequest.class));
     }
 
