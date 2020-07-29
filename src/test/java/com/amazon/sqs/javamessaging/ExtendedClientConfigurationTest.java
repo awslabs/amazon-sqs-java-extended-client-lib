@@ -32,10 +32,6 @@ public class ExtendedClientConfigurationTest {
     private static String s3BucketName = "test-bucket-name";
     private static String s3ServerSideEncryptionKMSKeyId = "test-customer-managed-kms-key-id";
 
-    @Before
-    public void setup() {
-    }
-
     @Test
     public void testCopyConstructor() {
         AmazonS3 s3 = mock(AmazonS3.class);
