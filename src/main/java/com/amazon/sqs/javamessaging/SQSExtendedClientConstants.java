@@ -17,7 +17,10 @@ package com.amazon.sqs.javamessaging;
 
 
 public class SQSExtendedClientConstants {
+    // This constant is shared with SNSExtendedClient
+    // SNS team should be notified of any changes made to this
     public static final String RESERVED_ATTRIBUTE_NAME = "ExtendedPayloadSize";
+    
     public static final int MAX_ALLOWED_ATTRIBUTES = 10 - 1; // 10 for SQS, 1 for the reserved attribute
     public static final int DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144;
     public static final String S3_BUCKET_NAME_MARKER = "-..s3BucketName..-";
