@@ -149,4 +149,121 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         this.setPayloadSupportDisabled();
         return this;
     }
+
+    /**
+     * Enables support for large-payload messages.
+     *
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            large-payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            large-payload messages. The bucket must be already created and
+     *            configured in s3.
+     *
+     * @deprecated Instead use {@link #setPayloadSupportEnabled(AmazonS3, String, boolean)}
+     */
+    @Deprecated
+    public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+        this.setPayloadSupportEnabled(s3, s3BucketName);
+    }
+
+    /**
+     * Enables support for large-payload messages.
+     *
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            large-payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            large-payload messages. The bucket must be already created and
+     *            configured in s3.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSupportEnabled(AmazonS3, String)}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+        setLargePayloadSupportEnabled(s3, s3BucketName);
+        return this;
+    }
+
+    /**
+     * Disables support for large-payload messages.
+     *
+     * @deprecated Instead use {@link #setPayloadSupportDisabled()}
+     */
+    @Deprecated
+    public void setLargePayloadSupportDisabled() {
+        this.setPayloadSupportDisabled();
+    }
+
+    /**
+     * Disables support for large-payload messages.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSupportDisabled()}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withLargePayloadSupportDisabled() {
+        setLargePayloadSupportDisabled();
+        return this;
+    }
+
+    /**
+     * Check if the support for large-payload message if enabled.
+     * @return true if support for large-payload messages is enabled.
+     *
+     * @deprecated Instead use {@link #isPayloadSupportEnabled()}
+     */
+    @Deprecated
+    public boolean isLargePayloadSupportEnabled() {
+        return isPayloadSupportEnabled();
+    }
+
+    /**
+     * Sets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @param messageSizeThreshold
+     *            Message size threshold to be used for storing in Amazon S3.
+     *            Default: 256KB.
+     *
+     * @deprecated Instead use {@link #setPayloadSizeThreshold(int)}
+     */
+    @Deprecated
+    public void setMessageSizeThreshold(int messageSizeThreshold) {
+        this.setPayloadSizeThreshold(messageSizeThreshold);
+    }
+
+    /**
+     * Sets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @param messageSizeThreshold
+     *            Message size threshold to be used for storing in Amazon S3.
+     *            Default: 256KB.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSizeThreshold(int)}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withMessageSizeThreshold(int messageSizeThreshold) {
+        setMessageSizeThreshold(messageSizeThreshold);
+        return this;
+    }
+
+    /**
+     * Gets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @return Message size threshold which is being used for storing in Amazon
+     *         S3. Default: 256KB.
+     *
+     * @deprecated Instead use {@link #getPayloadSizeThreshold()}
+     */
+    @Deprecated
+    public int getMessageSizeThreshold() {
+        return getPayloadSizeThreshold();
+    }
 }

@@ -47,6 +47,7 @@ public class AmazonSQSExtendedClientTest {
     private AmazonSQS extendedSqsWithCustomKMS;
     private AmazonSQS extendedSqsWithDefaultKMS;
     private AmazonSQS extendedSqsWithGenericReservedAttributeName;
+    private AmazonSQS extendedSqsWithDeprecatedMethods;
     private AmazonSQS mockSqsBackend;
     private AmazonS3 mockS3;
     private static final String S3_BUCKET_NAME = "test-bucket-name";
@@ -80,10 +81,75 @@ public class AmazonSQSExtendedClientTest {
         ExtendedClientConfiguration extendedClientConfigurationWithGenericReservedAttributeName = new ExtendedClientConfiguration()
                 .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withLegacyReservedAttributeNameDisabled();
 
+        ExtendedClientConfiguration extendedClientConfigurationDeprecated = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+
         extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
         extendedSqsWithCustomKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithCustomKMS));
         extendedSqsWithDefaultKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithDefaultKMS));
         extendedSqsWithGenericReservedAttributeName = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithGenericReservedAttributeName));
+        extendedSqsWithDeprecatedMethods = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationDeprecated));
+    }
+
+    @Test
+    public void testWhenSendMessageWithLargePayloadSupportDisabledThenS3IsNotUsedAndSqsBackendIsResponsibleToFailItWithDeprecatedMethod() {
+        int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportDisabled();
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        verify(mockS3, never()).putObject(isA(PutObjectRequest.class));
+        verify(mockSqsBackend).sendMessage(eq(messageRequest));
+    }
+
+    @Test
+    public void testWhenSendMessageWithAlwaysThroughS3AndMessageIsSmallThenItIsStillStoredInS3WithDeprecatedMethod() {
+        int messageLength = LESS_THAN_SQS_SIZE_LIMIT;
+        String messageBody = generateStringWithLength(messageLength);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testWhenSendMessageWithSetMessageSizeThresholdThenThresholdIsHonoredWithDeprecatedMethod() {
+        int messageLength = ARBITRARY_SMALLER_THRESHOLD * 2;
+        String messageBody = generateStringWithLength(messageLength);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withMessageSizeThreshold(ARBITRARY_SMALLER_THRESHOLD);
+
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mock(AmazonSQSClient.class), extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class));
+    }
+
+    @Test
+    public void testReceiveMessageMultipleTimesDoesNotAdditionallyAlterReceiveMessageRequestWithDeprecatedMethod() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withLargePayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(new ReceiveMessageResult());
+
+        ReceiveMessageRequest messageRequest = new ReceiveMessageRequest();
+        ReceiveMessageRequest expectedRequest = new ReceiveMessageRequest()
+                .withMessageAttributeNames(AmazonSQSExtendedClient.LEGACY_RESERVED_ATTRIBUTE_NAME, SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
+
+        sqsExtended.receiveMessage(messageRequest);
+        Assert.assertEquals(expectedRequest, messageRequest);
+
+        sqsExtended.receiveMessage(messageRequest);
+        Assert.assertEquals(expectedRequest, messageRequest);
     }
 
     @Test
