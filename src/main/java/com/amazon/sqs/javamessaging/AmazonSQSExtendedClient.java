@@ -123,7 +123,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
         S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client());
         this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName(),
-                clientConfiguration.getSSEAwsKeyManagementParams());
+                clientConfiguration.getSSEAwsKeyManagementParams(), clientConfiguration.getCannedAccessControlList());
     }
 
     /**

@@ -16,6 +16,7 @@
 package com.amazon.sqs.javamessaging;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.annotation.NotThreadSafe;
 import software.amazon.payloadoffloading.PayloadStorageConfiguration;
@@ -147,6 +148,12 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     @Override
     public ExtendedClientConfiguration withPayloadSupportDisabled() {
         this.setPayloadSupportDisabled();
+        return this;
+    }
+
+    @Override
+    public ExtendedClientConfiguration withCannedAccessControlList(CannedAccessControlList cannedAccessControlList) {
+        this.setCannedAccessControlList(cannedAccessControlList);
         return this;
     }
 

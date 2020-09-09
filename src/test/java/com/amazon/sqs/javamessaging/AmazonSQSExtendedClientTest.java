@@ -20,10 +20,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
+import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.*;
@@ -487,6 +484,24 @@ public class AmazonSQSExtendedClientTest {
         // then
         verify(mockSqsBackend, times(1)).deleteMessageBatch(any(DeleteMessageBatchRequest.class));
         verify(mockS3, times(batchSize)).deleteObject(eq(S3_BUCKET_NAME), anyString());
+    }
+
+    @Test
+    public void testWhenSendMessageWIthCannedAccessControlListDefined() {
+        CannedAccessControlList expected = CannedAccessControlList.BucketOwnerFullControl;
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withCannedAccessControlList(expected);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+
+        verify(mockS3).putObject(captor.capture());
+
+        Assert.assertEquals(expected, captor.getValue().getCannedAcl());
     }
 
     private void testReceiveMessage_when_MessageIsLarge(String reservedAttributeName) throws Exception {
