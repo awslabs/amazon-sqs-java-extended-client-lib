@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2010-2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -15,203 +15,255 @@
 
 package com.amazon.sqs.javamessaging;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.annotation.NotThreadSafe;
+import software.amazon.payloadoffloading.PayloadStorageConfiguration;
 
-import java.util.List;
 
 /**
  * Amazon SQS extended client configuration options such as Amazon S3 client,
  * bucket name, and message size threshold for large-payload messages.
  */
 @NotThreadSafe
-public class ExtendedClientConfiguration {
-	private static final Log LOG = LogFactory.getLog(ExtendedClientConfiguration.class);
+public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
 
-	private AmazonS3 s3;
-	private String s3BucketName;
-	private boolean largePayloadSupport = false;
-	private boolean alwaysThroughS3 = false;
-	private int messageSizeThreshold = SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD;
+    private boolean cleanupS3Payload = true;
+    private boolean useLegacyReservedAttributeName = true;
 
-	public ExtendedClientConfiguration() {
-		s3 = null;
-		s3BucketName = null;
-	}
+    public ExtendedClientConfiguration() {
+        super();
+        this.setPayloadSizeThreshold(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD);
+    }
 
-	public ExtendedClientConfiguration(ExtendedClientConfiguration other) {
-		this.s3 = other.s3;
-		this.s3BucketName = other.s3BucketName;
-		this.largePayloadSupport = other.largePayloadSupport;
-		this.alwaysThroughS3 = other.alwaysThroughS3;
-		this.messageSizeThreshold = other.messageSizeThreshold;
-	}
+    public ExtendedClientConfiguration(ExtendedClientConfiguration other) {
+        super(other);
+        this.cleanupS3Payload = other.doesCleanupS3Payload();
+        this.useLegacyReservedAttributeName = other.usesLegacyReservedAttributeName();
+    }
 
-	/**
-	 * Enables support for large-payload messages.
-	 *
-	 * @param s3
-	 *            Amazon S3 client which is going to be used for storing
-	 *            large-payload messages.
-	 * @param s3BucketName
-	 *            Name of the bucket which is going to be used for storing
-	 *            large-payload messages. The bucket must be already created and
-	 *            configured in s3.
-	 */
-	public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
-		if (s3 == null || s3BucketName == null) {
-			String errorMessage = "S3 client and/or S3 bucket name cannot be null.";
-			LOG.error(errorMessage);
-			throw new AmazonClientException(errorMessage);
-		}
-		if (isLargePayloadSupportEnabled()) {
-			LOG.warn("Large-payload support is already enabled. Overwriting AmazonS3Client and S3BucketName.");
-		}
-		this.s3 = s3;
-		this.s3BucketName = s3BucketName;
-		largePayloadSupport = true;
-		LOG.info("Large-payload support enabled.");
-	}
+    /**
+     * Enables support for payload messages.
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            payload messages. The bucket must be already created and
+     *            configured in s3.
+     * @param cleanupS3Payload
+     *            If set to true, would handle deleting the S3 object as part
+     *            of deleting the message from SQS queue. Otherwise, would not
+     *            attempt to delete the object from S3. If opted to not delete S3
+     *            objects its the responsibility to the message producer to handle
+     *            the clean up appropriately.
+     */
+    public void setPayloadSupportEnabled(AmazonS3 s3, String s3BucketName, boolean cleanupS3Payload) {
+        setPayloadSupportEnabled(s3, s3BucketName);
+        this.cleanupS3Payload = cleanupS3Payload;
+    }
 
-	/**
-	 * Enables support for large-payload messages.
-	 *
-	 * @param s3
-	 *            Amazon S3 client which is going to be used for storing
-	 *            large-payload messages.
-	 * @param s3BucketName
-	 *            Name of the bucket which is going to be used for storing
-	 *            large-payload messages. The bucket must be already created and
-	 *            configured in s3.
-	 * @return the updated ExtendedClientConfiguration object.
-	 */
-	public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
-		setLargePayloadSupportEnabled(s3, s3BucketName);
-		return this;
-	}
+    /**
+     * Enables support for payload messages.
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            payload messages. The bucket must be already created and
+     *            configured in s3.
+     * @param cleanupS3Payload
+     *            If set to true, would handle deleting the S3 object as part
+     *            of deleting the message from SQS queue. Otherwise, would not
+     *            attempt to delete the object from S3. If opted to not delete S3
+     *            objects its the responsibility to the message producer to handle
+     *            the clean up appropriately.
+     */
+    public ExtendedClientConfiguration withPayloadSupportEnabled(AmazonS3 s3, String s3BucketName, boolean cleanupS3Payload) {
+        setPayloadSupportEnabled(s3, s3BucketName, cleanupS3Payload);
+        return this;
+    }
 
-	/**
-	 * Disables support for large-payload messages.
-	 */
-	public void setLargePayloadSupportDisabled() {
-		s3 = null;
-		s3BucketName = null;
-		largePayloadSupport = false;
-		LOG.info("Large-payload support disabled.");
-	}
+    /**
+     * Disables the utilization legacy payload attribute name when sending messages.
+     */
+    public void setLegacyReservedAttributeNameDisabled() {
+        this.useLegacyReservedAttributeName = false;
+    }
 
-	/**
-	 * Disables support for large-payload messages.
-	 * @return the updated ExtendedClientConfiguration object.
-	 */
-	public ExtendedClientConfiguration withLargePayloadSupportDisabled() {
-		setLargePayloadSupportDisabled();
-		return this;
-	}
+    /**
+     * Disables the utilization legacy payload attribute name when sending messages.
+     */
+    public ExtendedClientConfiguration withLegacyReservedAttributeNameDisabled() {
+        setLegacyReservedAttributeNameDisabled();
+        return this;
+    }
 
-	/**
-	 * Check if the support for large-payload message if enabled.
-	 *
-	 * @return true if support for large-payload messages is enabled.
-	 */
-	public boolean isLargePayloadSupportEnabled() {
-		return largePayloadSupport;
-	}
+    /**
+     * Checks whether or not clean up large objects in S3 is enabled.
+     *
+     * @return True if clean up is enabled when deleting the concerning SQS message.
+     *         Default: true
+     */
+    public boolean doesCleanupS3Payload() {
+        return cleanupS3Payload;
+    }
 
-	/**
-	 * Gets the Amazon S3 client which is being used for storing large-payload
-	 * messages.
-	 *
-	 * @return Reference to the Amazon S3 client which is being used.
-	 */
-	public AmazonS3 getAmazonS3Client() {
-		return s3;
-	}
+    /**
+     * Checks whether or not the configuration uses the legacy reserved attribute name.
+     *
+     * @return True if legacy reserved attribute name is used.
+     *         Default: true
+     */
 
-	/**
-	 * Gets the name of the S3 bucket which is being used for storing
-	 * large-payload messages.
-	 *
-	 * @return The name of the bucket which is being used.
-	 */
-	public String getS3BucketName() {
-		return s3BucketName;
-	}
+    public boolean usesLegacyReservedAttributeName() {
+        return useLegacyReservedAttributeName;
+    }
 
-	/**
-	 * Sets the message size threshold for storing message payloads in Amazon
-	 * S3.
-	 *
-	 * @param messageSizeThreshold
-	 *            Message size threshold to be used for storing in Amazon S3.
-	 *            Default: 256KB.
-	 */
-	public void setMessageSizeThreshold(int messageSizeThreshold) {
-		this.messageSizeThreshold = messageSizeThreshold;
-	}
+    @Override
+    public ExtendedClientConfiguration withAlwaysThroughS3(boolean alwaysThroughS3) {
+        setAlwaysThroughS3(alwaysThroughS3);
+        return this;
+    }
 
-	/**
-	 * Sets the message size threshold for storing message payloads in Amazon
-	 * S3.
-	 *
-	 * @param messageSizeThreshold
-	 *            Message size threshold to be used for storing in Amazon S3.
-	 *            Default: 256KB.
-	 * @return the updated ExtendedClientConfiguration object.
-	 */
-	public ExtendedClientConfiguration withMessageSizeThreshold(int messageSizeThreshold) {
-		setMessageSizeThreshold(messageSizeThreshold);
-		return this;
-	}
+    @Override
+    public ExtendedClientConfiguration withPayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+        this.setPayloadSupportEnabled(s3, s3BucketName);
+        return this;
+    }
 
-	/**
-	 * Gets the message size threshold for storing message payloads in Amazon
-	 * S3.
-	 *
-	 * @return Message size threshold which is being used for storing in Amazon
-	 *         S3. Default: 256KB.
-	 */
-	public int getMessageSizeThreshold() {
-		return messageSizeThreshold;
-	}
+    @Override
+    public ExtendedClientConfiguration withSSEAwsKeyManagementParams(SSEAwsKeyManagementParams sseAwsKeyManagementParams) {
+        this.setSSEAwsKeyManagementParams(sseAwsKeyManagementParams);
+        return this;
+    }
 
-	/**
-	 * Sets whether or not all messages regardless of their payload size should
-	 * be stored in Amazon S3.
-	 *
-	 * @param alwaysThroughS3
-	 *            Whether or not all messages regardless of their payload size
-	 *            should be stored in Amazon S3. Default: false
-	 */
-	public void setAlwaysThroughS3(boolean alwaysThroughS3) {
-		this.alwaysThroughS3 = alwaysThroughS3;
-	}
+    @Override
+    public ExtendedClientConfiguration withPayloadSizeThreshold(int payloadSizeThreshold) {
+        this.setPayloadSizeThreshold(payloadSizeThreshold);
+        return this;
+    }
 
-	/**
-	 * Sets whether or not all messages regardless of their payload size should
-	 * be stored in Amazon S3.
-	 *
-	 * @param alwaysThroughS3
-	 *            Whether or not all messages regardless of their payload size
-	 *            should be stored in Amazon S3. Default: false
-	 * @return the updated ExtendedClientConfiguration object.
-	 */
-	public ExtendedClientConfiguration withAlwaysThroughS3(boolean alwaysThroughS3) {
-		setAlwaysThroughS3(alwaysThroughS3);
-		return this;
-	}
+    @Override
+    public ExtendedClientConfiguration withPayloadSupportDisabled() {
+        this.setPayloadSupportDisabled();
+        return this;
+    }
 
-	/**
-	 * Checks whether or not all messages regardless of their payload size are
-	 * being stored in Amazon S3.
-	 *
-	 * @return True if all messages regardless of their payload size are being
-	 *         stored in Amazon S3. Default: false
-	 */
-	public boolean isAlwaysThroughS3() {
-		return alwaysThroughS3;
-	}
+    /**
+     * Enables support for large-payload messages.
+     *
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            large-payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            large-payload messages. The bucket must be already created and
+     *            configured in s3.
+     *
+     * @deprecated Instead use {@link #setPayloadSupportEnabled(AmazonS3, String, boolean)}
+     */
+    @Deprecated
+    public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+        this.setPayloadSupportEnabled(s3, s3BucketName);
+    }
+
+    /**
+     * Enables support for large-payload messages.
+     *
+     * @param s3
+     *            Amazon S3 client which is going to be used for storing
+     *            large-payload messages.
+     * @param s3BucketName
+     *            Name of the bucket which is going to be used for storing
+     *            large-payload messages. The bucket must be already created and
+     *            configured in s3.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSupportEnabled(AmazonS3, String)}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+        setLargePayloadSupportEnabled(s3, s3BucketName);
+        return this;
+    }
+
+    /**
+     * Disables support for large-payload messages.
+     *
+     * @deprecated Instead use {@link #setPayloadSupportDisabled()}
+     */
+    @Deprecated
+    public void setLargePayloadSupportDisabled() {
+        this.setPayloadSupportDisabled();
+    }
+
+    /**
+     * Disables support for large-payload messages.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSupportDisabled()}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withLargePayloadSupportDisabled() {
+        setLargePayloadSupportDisabled();
+        return this;
+    }
+
+    /**
+     * Check if the support for large-payload message if enabled.
+     * @return true if support for large-payload messages is enabled.
+     *
+     * @deprecated Instead use {@link #isPayloadSupportEnabled()}
+     */
+    @Deprecated
+    public boolean isLargePayloadSupportEnabled() {
+        return isPayloadSupportEnabled();
+    }
+
+    /**
+     * Sets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @param messageSizeThreshold
+     *            Message size threshold to be used for storing in Amazon S3.
+     *            Default: 256KB.
+     *
+     * @deprecated Instead use {@link #setPayloadSizeThreshold(int)}
+     */
+    @Deprecated
+    public void setMessageSizeThreshold(int messageSizeThreshold) {
+        this.setPayloadSizeThreshold(messageSizeThreshold);
+    }
+
+    /**
+     * Sets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @param messageSizeThreshold
+     *            Message size threshold to be used for storing in Amazon S3.
+     *            Default: 256KB.
+     * @return the updated ExtendedClientConfiguration object.
+     *
+     * @deprecated Instead use {@link #withPayloadSizeThreshold(int)}
+     */
+    @Deprecated
+    public ExtendedClientConfiguration withMessageSizeThreshold(int messageSizeThreshold) {
+        setMessageSizeThreshold(messageSizeThreshold);
+        return this;
+    }
+
+    /**
+     * Gets the message size threshold for storing message payloads in Amazon
+     * S3.
+     *
+     * @return Message size threshold which is being used for storing in Amazon
+     *         S3. Default: 256KB.
+     *
+     * @deprecated Instead use {@link #getPayloadSizeThreshold()}
+     */
+    @Deprecated
+    public int getMessageSizeThreshold() {
+        return getPayloadSizeThreshold();
+    }
 }
