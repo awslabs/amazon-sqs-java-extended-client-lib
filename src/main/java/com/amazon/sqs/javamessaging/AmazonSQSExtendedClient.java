@@ -359,6 +359,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 			if (largePayloadAttributeValue != null) {
 				String messageBody = message.getBody();
 
+				messageBody = messageBody.replace("software.amazon.payloadoffloading.PayloadS3Pointer", "com.amazon.sqs.javamessaging.MessageS3Pointer");
+
 				// read the S3 pointer from the message body JSON string.
 				MessageS3Pointer s3Pointer = readMessageS3PointerFromJSON(messageBody);
 
