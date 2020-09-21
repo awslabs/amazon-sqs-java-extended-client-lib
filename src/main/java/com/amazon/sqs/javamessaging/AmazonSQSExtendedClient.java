@@ -15,47 +15,21 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.nio.ByteBuffer;
+import java.lang.UnsupportedOperationException;
 import java.util.*;
-import java.util.Map.Entry;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageResult;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.MessageNotInflightException;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.PurgeQueueResult;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.util.StringUtils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.core.exception.*;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
 import software.amazon.payloadoffloading.*;
 
 
@@ -78,9 +52,11 @@ import software.amazon.payloadoffloading.*;
  * <li>Delete the corresponding message object from an Amazon S3 bucket.</li>
  * </ul>
  */
-public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase implements AmazonSQS {
+public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase implements SqsClient {
+    static final String USER_AGENT_HEADER = Util.getUserAgentHeader(AmazonSQSExtendedClient.class.getSimpleName());
+    static final String USER_AGENT_HEADER_NAME = "User-Agent";
+
     private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClient.class);
-    private static final String USER_AGENT_HEADER = Util.getUserAgentHeader(AmazonSQSExtendedClient.class.getSimpleName());
     static final String LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
     static final List<String> RESERVED_ATTRIBUTE_NAMES = Arrays.asList(LEGACY_RESERVED_ATTRIBUTE_NAME,
             SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
@@ -99,7 +75,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @param sqsClient
      *            The Amazon SQS client to use to connect to Amazon SQS.
      */
-    public AmazonSQSExtendedClient(AmazonSQS sqsClient) {
+    public AmazonSQSExtendedClient(SqsClient sqsClient) {
         this(sqsClient, new ExtendedClientConfiguration());
     }
 
@@ -118,7 +94,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *            The extended client configuration options controlling the
      *            functionality of this client.
      */
-    public AmazonSQSExtendedClient(AmazonSQS sqsClient, ExtendedClientConfiguration extendedClientConfig) {
+    public AmazonSQSExtendedClient(SqsClient sqsClient, ExtendedClientConfiguration extendedClientConfig) {
         super(sqsClient);
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
         S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client());
@@ -128,39 +104,40 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     /**
      * <p>
-     * Delivers a message to the specified queue and uploads the message payload
-     * to Amazon S3 if necessary.
+     * Delivers a message to the specified queue.
+     * </p>
+     * <important>
+     * <p>
+     * A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed:
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> The following list shows the characters (in Unicode)
-     * allowed in your message, according to the W3C XML specification. For more
-     * information, go to http://www.w3.org/TR/REC-xml/#charsets If you send any
-     * characters not included in the list, your request will be rejected. #x9 |
-     * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
+     * <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> |
+     * <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>
      * </p>
-     *
-     * <b>IMPORTANT:</b> The input object may be modified by the method. </p>
+     * <p>
+     * Any characters not included in this list will be rejected. For more information, see the <a
+     * href="http://www.w3.org/TR/REC-xml/#charsets">W3C specification for characters</a>.
+     * </p>
+     * </important>
      *
      * @param sendMessageRequest
-     *            Container for the necessary parameters to execute the
-     *            SendMessage service method on AmazonSQS.
-     *
-     * @return The response from the SendMessage service method, as returned by
-     *         AmazonSQS.
-     *
+     * @return Result of the SendMessage operation returned by the service.
      * @throws InvalidMessageContentsException
+     *         The message contains characters outside the allowed set.
      * @throws UnsupportedOperationException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         Error code 400. Unsupported operation.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.SendMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public SendMessageResult sendMessage(SendMessageRequest sendMessageRequest) {
+    public SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) {
         //TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
         if (sendMessageRequest == null) {
             String errorMessage = "sendMessageRequest cannot be null.";
@@ -168,20 +145,25 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        sendMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
+        sendMessageRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
+        sendMessageRequest = sendMessageRequestBuilder.build();
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.sendMessage(sendMessageRequest);
         }
 
-        if (sendMessageRequest.getMessageBody() == null || "".equals(sendMessageRequest.getMessageBody())) {
+        if (StringUtils.isNullOrEmpty(sendMessageRequest.messageBody())) {
             String errorMessage = "messageBody cannot be null or empty.";
             LOG.error(errorMessage);
             throw new AmazonClientException(errorMessage);
         }
 
         //Check message attributes for ExtendedClient related constraints
-        checkMessageAttributes(sendMessageRequest.getMessageAttributes());
+        checkMessageAttributes(sendMessageRequest.messageAttributes());
 
         if (clientConfiguration.isAlwaysThroughS3() || isLarge(sendMessageRequest)) {
             sendMessageRequest = storeMessageInS3(sendMessageRequest);
@@ -191,144 +173,97 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     /**
      * <p>
-     * Delivers a message to the specified queue and uploads the message payload
-     * to Amazon S3 if necessary.
+     * Retrieves one or more messages (up to 10), from the specified queue. Using the <code>WaitTimeSeconds</code>
+     * parameter enables long-poll support. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html">Amazon
+     * SQS Long Polling</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> The following list shows the characters (in Unicode)
-     * allowed in your message, according to the W3C XML specification. For more
-     * information, go to http://www.w3.org/TR/REC-xml/#charsets If you send any
-     * characters not included in the list, your request will be rejected. #x9 |
-     * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param messageBody
-     *            The message to send. For a list of allowed characters, see the
-     *            preceding important note.
-     *
-     * @return The response from the SendMessage service method, as returned by
-     *         AmazonSQS.
-     *
-     * @throws InvalidMessageContentsException
-     * @throws UnsupportedOperationException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public SendMessageResult sendMessage(String queueUrl, String messageBody) {
-        SendMessageRequest sendMessageRequest = new SendMessageRequest(queueUrl, messageBody);
-        return sendMessage(sendMessageRequest);
-    }
-
-    /**
-     * <p>
-     * Retrieves one or more messages, with a maximum limit of 10 messages, from
-     * the specified queue. Downloads the message payloads from Amazon S3 when
-     * necessary. Long poll support is enabled by using the
-     * <code>WaitTimeSeconds</code> parameter. For more information, see <a
-     * href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html"
-     * > Amazon SQS Long Poll </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     * <p>
-     * Short poll is the default behavior where a weighted random set of
-     * machines is sampled on a <code>ReceiveMessage</code> call. This means
-     * only the messages on the sampled machines are returned. If the number of
-     * messages in the queue is small (less than 1000), it is likely you will
-     * get fewer messages than you requested per <code>ReceiveMessage</code>
-     * call. If the number of messages in the queue is extremely small, you
-     * might not receive any messages in a particular
-     * <code>ReceiveMessage</code> response; in which case you should repeat the
-     * request.
+     * Short poll is the default behavior where a weighted random set of machines is sampled on a
+     * <code>ReceiveMessage</code> call. Thus, only the messages on the sampled machines are returned. If the number of
+     * messages in the queue is small (fewer than 1,000), you most likely get fewer messages than you requested per
+     * <code>ReceiveMessage</code> call. If the number of messages in the queue is extremely small, you might not
+     * receive any messages in a particular <code>ReceiveMessage</code> response. If this happens, repeat the request.
      * </p>
      * <p>
      * For each message returned, the response includes the following:
      * </p>
-     *
      * <ul>
      * <li>
      * <p>
-     * Message body
+     * The message body.
      * </p>
      * </li>
      * <li>
      * <p>
-     * MD5 digest of the message body. For information about MD5, go to <a
-     * href="http://www.faqs.org/rfcs/rfc1321.html">
-     * http://www.faqs.org/rfcs/rfc1321.html </a> .
+     * An MD5 digest of the message body. For information about MD5, see <a
+     * href="https://www.ietf.org/rfc/rfc1321.txt">RFC1321</a>.
      * </p>
      * </li>
      * <li>
      * <p>
-     * Message ID you received when you sent the message to the queue.
+     * The <code>MessageId</code> you received when you sent the message to the queue.
      * </p>
      * </li>
      * <li>
      * <p>
-     * Receipt handle.
+     * The receipt handle.
      * </p>
      * </li>
      * <li>
      * <p>
-     * Message attributes.
+     * The message attributes.
      * </p>
      * </li>
      * <li>
      * <p>
-     * MD5 digest of the message attributes.
+     * An MD5 digest of the message attributes.
      * </p>
      * </li>
-     *
      * </ul>
      * <p>
-     * The receipt handle is the identifier you must provide when deleting the
-     * message. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ImportantIdentifiers.html"
-     * > Queue and Message Identifiers </a> in the <i>Amazon SQS Developer
-     * Guide</i> .
+     * The receipt handle is the identifier you must provide when deleting the message. For more information, see <a
+     * href
+     * ="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html"
+     * >Queue and Message Identifiers</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * You can provide the <code>VisibilityTimeout</code> parameter in your
-     * request, which will be applied to the messages that Amazon SQS returns in
-     * the response. If you do not include the parameter, the overall visibility
-     * timeout for the queue is used for the returned messages. For more
-     * information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .
+     * You can provide the <code>VisibilityTimeout</code> parameter in your request. The parameter is applied to the
+     * messages that Amazon SQS returns in the response. If you don't include the parameter, the overall visibility
+     * timeout for the queue is used for the returned messages. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+     * >Visibility Timeout</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * <b>NOTE:</b> Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
+     * A message that isn't deleted or a message whose visibility isn't extended before the visibility timeout expires
+     * counts as a failed receive. Depending on the configuration of the queue, the message might be sent to the
+     * dead-letter queue.
      * </p>
+     * <note>
+     * <p>
+     * In the future, new attributes might be added. If you write code that calls this action, we recommend that you
+     * structure your code so that it can handle new attributes gracefully.
+     * </p>
+     * </note>
      *
      * @param receiveMessageRequest
-     *            Container for the necessary parameters to execute the
-     *            ReceiveMessage service method on AmazonSQS.
-     *
-     * @return The response from the ReceiveMessage service method, as returned
-     *         by AmazonSQS.
-     *
+     * @return Result of the ReceiveMessage operation returned by the service.
      * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified action violates a limit. For example, <code>ReceiveMessage</code> returns this error if the
+     *         maximum number of inflight messages is reached and <code>AddPermission</code> returns this error if the
+     *         maximum number of permissions for the queue is reached.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ReceiveMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ReceiveMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public ReceiveMessageResult receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
+    public ReceiveMessageResponse receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
         //TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
         if (receiveMessageRequest == null) {
             String errorMessage = "receiveMessageRequest cannot be null.";
@@ -336,195 +271,100 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        receiveMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
+        receiveMessageRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
-            return super.receiveMessage(receiveMessageRequest);
+            return super.receiveMessage(receiveMessageRequestBuilder.build());
         }
         //Remove before adding to avoid any duplicates
-        receiveMessageRequest.getMessageAttributeNames().removeAll(RESERVED_ATTRIBUTE_NAMES);
-        receiveMessageRequest.getMessageAttributeNames().addAll(RESERVED_ATTRIBUTE_NAMES);
+        List<String> messageAttributeNames = new ArrayList<>(receiveMessageRequest.messageAttributeNames());
+        messageAttributeNames.removeAll(RESERVED_ATTRIBUTE_NAMES);
+        messageAttributeNames.addAll(RESERVED_ATTRIBUTE_NAMES);
+        receiveMessageRequestBuilder.attributeNamesWithStrings(messageAttributeNames);
+        receiveMessageRequest = receiveMessageRequestBuilder.build();
 
-        ReceiveMessageResult receiveMessageResult = super.receiveMessage(receiveMessageRequest);
+        ReceiveMessageResponse receiveMessageResponse = super.receiveMessage(receiveMessageRequest);
+        ReceiveMessageResponse.Builder receiveMessageResponseBuilder = receiveMessageResponse.toBuilder();
 
-        List<Message> messages = receiveMessageResult.getMessages();
+        List<Message> messages = receiveMessageResponse.messages();
+        List<Message> modifiedMessages = new ArrayList<>(messages.size());
         for (Message message : messages) {
+            Message.Builder messageBuilder = message.toBuilder();
 
             // for each received message check if they are stored in S3.
-            Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.getMessageAttributes());
+            Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
             if (largePayloadAttributeName.isPresent()) {
-                String largeMessagePointer = message.getBody();
+                String largeMessagePointer = message.body();
 
-                message.setBody(payloadStore.getOriginalPayload(largeMessagePointer));
+                messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
 
                 // remove the additional attribute before returning the message
                 // to user.
-                message.getMessageAttributes().keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
+                Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
+                messageAttributes.keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
+                messageBuilder.messageAttributes(messageAttributes);
 
                 // Embed s3 object pointer in the receipt handle.
                 String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
-                        message.getReceiptHandle(),
+                        message.receiptHandle(),
                         largeMessagePointer);
 
-                message.setReceiptHandle(modifiedReceiptHandle);
+                messageBuilder.receiptHandle(modifiedReceiptHandle);
             }
+            modifiedMessages.add(messageBuilder.build());
         }
-        return receiveMessageResult;
+
+        receiveMessageResponseBuilder.messages(modifiedMessages);
+        return receiveMessageResponseBuilder.build();
     }
 
     /**
      * <p>
-     * Retrieves one or more messages, with a maximum limit of 10 messages, from
-     * the specified queue. Downloads the message payloads from Amazon S3 when
-     * necessary. Long poll support is enabled by using the
-     * <code>WaitTimeSeconds</code> parameter. For more information, see <a
-     * href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html"
-     * > Amazon SQS Long Poll </a> in the <i>Amazon SQS Developer Guide</i> .
+     * Deletes the specified message from the specified queue. To select the message to delete, use the
+     * <code>ReceiptHandle</code> of the message (<i>not</i> the <code>MessageId</code> which you receive when you send
+     * the message). Amazon SQS can delete a message from a queue even if a visibility timeout setting causes the
+     * message to be locked by another consumer. Amazon SQS automatically deletes messages left in a queue longer than
+     * the retention period configured for the queue.
+     * </p>
+     * <note>
+     * <p>
+     * The <code>ReceiptHandle</code> is associated with a <i>specific instance</i> of receiving a message. If you
+     * receive a message more than once, the <code>ReceiptHandle</code> is different each time you receive a message.
+     * When you use the <code>DeleteMessage</code> action, you must provide the most recently received
+     * <code>ReceiptHandle</code> for the message (otherwise, the request succeeds, but the message might not be
+     * deleted).
      * </p>
      * <p>
-     * Short poll is the default behavior where a weighted random set of
-     * machines is sampled on a <code>ReceiveMessage</code> call. This means
-     * only the messages on the sampled machines are returned. If the number of
-     * messages in the queue is small (less than 1000), it is likely you will
-     * get fewer messages than you requested per <code>ReceiveMessage</code>
-     * call. If the number of messages in the queue is extremely small, you
-     * might not receive any messages in a particular
-     * <code>ReceiveMessage</code> response; in which case you should repeat the
-     * request.
+     * For standard queues, it is possible to receive a message even after you delete it. This might happen on rare
+     * occasions if one of the servers which stores a copy of the message is unavailable when you send the request to
+     * delete the message. The copy remains on the server and might be returned to you during a subsequent receive
+     * request. You should ensure that your application is idempotent, so that receiving a message more than once does
+     * not cause issues.
      * </p>
-     * <p>
-     * For each message returned, the response includes the following:
-     * </p>
-     *
-     * <ul>
-     * <li>
-     * <p>
-     * Message body
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * MD5 digest of the message body. For information about MD5, go to <a
-     * href="http://www.faqs.org/rfcs/rfc1321.html">
-     * http://www.faqs.org/rfcs/rfc1321.html </a> .
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * Message ID you received when you sent the message to the queue.
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * Receipt handle.
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * Message attributes.
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * MD5 digest of the message attributes.
-     * </p>
-     * </li>
-     *
-     * </ul>
-     * <p>
-     * The receipt handle is the identifier you must provide when deleting the
-     * message. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ImportantIdentifiers.html"
-     * > Queue and Message Identifiers </a> in the <i>Amazon SQS Developer
-     * Guide</i> .
-     * </p>
-     * <p>
-     * You can provide the <code>VisibilityTimeout</code> parameter in your
-     * request, which will be applied to the messages that Amazon SQS returns in
-     * the response. If you do not include the parameter, the overall visibility
-     * timeout for the queue is used for the returned messages. For more
-     * information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     * <p>
-     * <b>NOTE:</b> Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     *
-     * @return The response from the ReceiveMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public ReceiveMessageResult receiveMessage(String queueUrl) {
-        ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(queueUrl);
-        return receiveMessage(receiveMessageRequest);
-    }
-
-    /**
-     * <p>
-     * Deletes the specified message from the specified queue and deletes the
-     * message payload from Amazon S3 when necessary. You specify the message by
-     * using the message's <code>receipt handle</code> and not the
-     * <code>message ID</code> you received when you sent the message. Even if
-     * the message is locked by another reader due to the visibility timeout
-     * setting, it is still deleted from the queue. If you leave a message in
-     * the queue for longer than the queue's configured retention period, Amazon
-     * SQS automatically deletes it.
-     * </p>
-     * <p>
-     * <b>NOTE:</b> The receipt handle is associated with a specific instance of
-     * receiving the message. If you receive a message more than once, the
-     * receipt handle you get each time you receive the message is different.
-     * When you request DeleteMessage, if you don't provide the most recently
-     * received receipt handle for the message, the request will still succeed,
-     * but the message might not be deleted.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> It is possible you will receive a message even after
-     * you have deleted it. This might happen on rare occasions if one of the
-     * servers storing a copy of the message is unavailable when you request to
-     * delete the message. The copy remains on the server and might be returned
-     * to you again on a subsequent receive request. You should create your
-     * system to be idempotent so that receiving a particular message more than
-     * once is not a problem.
-     * </p>
+     * </note>
      *
      * @param deleteMessageRequest
-     *            Container for the necessary parameters to execute the
-     *            DeleteMessage service method on AmazonSQS.
-     *
-     * @return The response from the DeleteMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws ReceiptHandleIsInvalidException
+     * @return Result of the DeleteMessage operation returned by the service.
      * @throws InvalidIdFormatException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified receipt handle isn't valid for the current version.
+     * @throws ReceiptHandleIsInvalidException
+     *         The specified receipt handle isn't valid.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.DeleteMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+    public DeleteMessageResponse deleteMessage(DeleteMessageRequest deleteMessageRequest) {
 
         if (deleteMessageRequest == null) {
             String errorMessage = "deleteMessageRequest cannot be null.";
@@ -532,13 +372,17 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        deleteMessageRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        DeleteMessageRequest.Builder deleteMessageRequestBuilder = deleteMessageRequest.toBuilder();
+        deleteMessageRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
-            return super.deleteMessage(deleteMessageRequest);
+            return super.deleteMessage(deleteMessageRequestBuilder.build());
         }
 
-        String receiptHandle = deleteMessageRequest.getReceiptHandle();
+        String receiptHandle = deleteMessageRequest.receiptHandle();
         String origReceiptHandle = receiptHandle;
 
         // Update original receipt handle if needed
@@ -551,210 +395,175 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             }
         }
 
-        deleteMessageRequest.setReceiptHandle(origReceiptHandle);
-        return super.deleteMessage(deleteMessageRequest);
+        deleteMessageRequestBuilder.receiptHandle(origReceiptHandle);
+        return super.deleteMessage(deleteMessageRequestBuilder.build());
     }
 
     /**
      * <p>
-     * Deletes the specified message from the specified queue and deletes the
-     * message payload from Amazon S3 when necessary. You specify the message by
-     * using the message's <code>receipt handle</code> and not the
-     * <code>message ID</code> you received when you sent the message. Even if
-     * the message is locked by another reader due to the visibility timeout
-     * setting, it is still deleted from the queue. If you leave a message in
-     * the queue for longer than the queue's configured retention period, Amazon
-     * SQS automatically deletes it.
+     * Changes the visibility timeout of a specified message in a queue to a new value. The default visibility timeout
+     * for a message is 30 seconds. The minimum is 0 seconds. The maximum is 12 hours. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">
+     * Visibility Timeout</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * <b>NOTE:</b> The receipt handle is associated with a specific instance of
-     * receiving the message. If you receive a message more than once, the
-     * receipt handle you get each time you receive the message is different.
-     * When you request DeleteMessage, if you don't provide the most recently
-     * received receipt handle for the message, the request will still succeed,
-     * but the message might not be deleted.
+     * For example, you have a message with a visibility timeout of 5 minutes. After 3 minutes, you call
+     * <code>ChangeMessageVisibility</code> with a timeout of 10 minutes. You can continue to call
+     * <code>ChangeMessageVisibility</code> to extend the visibility timeout to the maximum allowed time. If you try to
+     * extend the visibility timeout beyond the maximum, your request is rejected.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> It is possible you will receive a message even after
-     * you have deleted it. This might happen on rare occasions if one of the
-     * servers storing a copy of the message is unavailable when you request to
-     * delete the message. The copy remains on the server and might be returned
-     * to you again on a subsequent receive request. You should create your
-     * system to be idempotent so that receiving a particular message more than
-     * once is not a problem.
+     * An Amazon SQS message has three basic states:
      * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param receiptHandle
-     *            The receipt handle associated with the message to delete.
-     *
-     * @return The response from the DeleteMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws ReceiptHandleIsInvalidException
-     * @throws InvalidIdFormatException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle) {
-        DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest(queueUrl, receiptHandle);
-        return deleteMessage(deleteMessageRequest);
-    }
-
-    /**
-     * Simplified method form for invoking the ChangeMessageVisibility
-     * operation.
-     *
-     * @see #changeMessageVisibility(ChangeMessageVisibilityRequest)
-     */
-    public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl,
-                                                                 String receiptHandle,
-                                                                 Integer visibilityTimeout) {
-        ChangeMessageVisibilityRequest changeMessageVisibilityRequest =
-                new ChangeMessageVisibilityRequest(queueUrl, receiptHandle, visibilityTimeout);
-        return changeMessageVisibility(changeMessageVisibilityRequest);
-    }
-
-    /**
+     * <ol>
+     * <li>
      * <p>
-     * Changes the visibility timeout of a specified message in a queue to a new
-     * value. The maximum allowed timeout value you can set the value to is 12
-     * hours. This means you can't extend the timeout of a message in an
-     * existing queue to more than a total visibility timeout of 12 hours. (For
-     * more information visibility timeout, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .)
+     * Sent to a queue by a producer.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Received from the queue by a consumer.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Deleted from the queue.
+     * </p>
+     * </li>
+     * </ol>
+     * <p>
+     * A message is considered to be <i>stored</i> after it is sent to a queue by a producer, but not yet received from
+     * the queue by a consumer (that is, between states 1 and 2). There is no limit to the number of stored messages. A
+     * message is considered to be <i>in flight</i> after it is received from a queue by a consumer, but not yet deleted
+     * from the queue (that is, between states 2 and 3). There is a limit to the number of inflight messages.
      * </p>
      * <p>
-     * For example, let's say you have a message and its default message
-     * visibility timeout is 30 minutes. You could call
-     * <code>ChangeMessageVisiblity</code> with a value of two hours and the
-     * effective timeout would be two hours and 30 minutes. When that time comes
-     * near you could again extend the time out by calling
-     * ChangeMessageVisiblity, but this time the maximum allowed timeout would
-     * be 9 hours and 30 minutes.
+     * Limits that apply to inflight messages are unrelated to the <i>unlimited</i> number of stored messages.
      * </p>
      * <p>
-     * <b>NOTE:</b> There is a 120,000 limit for the number of inflight messages
-     * per queue. Messages are inflight after they have been received from the
-     * queue by a consuming component, but have not yet been deleted from the
-     * queue. If you reach the 120,000 limit, you will receive an OverLimit
-     * error message from Amazon SQS. To help avoid reaching the limit, you
-     * should delete the messages from the queue after they have been processed.
-     * You can also increase the number of queues you use to process the
-     * messages.
+     * For most standard queues (depending on queue traffic and message backlog), there can be a maximum of
+     * approximately 120,000 inflight messages (received from a queue by a consumer, but not yet deleted from the
+     * queue). If you reach this limit, Amazon SQS returns the <code>OverLimit</code> error message. To avoid reaching
+     * the limit, you should delete messages from the queue after they're processed. You can also increase the number of
+     * queues you use to process your messages. To request a limit increase, <a href=
+     * "https://console.aws.amazon.com/support/home#/case/create?issueType=service-limit-increase&amp;limitType=service-code-sqs"
+     * >file a support request</a>.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>If you attempt to set the VisibilityTimeout to an amount
-     * more than the maximum time left, Amazon SQS returns an error. It will not
-     * automatically recalculate and increase the timeout to the maximum time
-     * remaining.
+     * For FIFO queues, there can be a maximum of 20,000 inflight messages (received from a queue by a consumer, but not
+     * yet deleted from the queue). If you reach this limit, Amazon SQS returns no error messages.
+     * </p>
+     * <important>
+     * <p>
+     * If you attempt to set the <code>VisibilityTimeout</code> to a value greater than the maximum time left, Amazon
+     * SQS returns an error. Amazon SQS doesn't automatically recalculate and increase the timeout to the maximum
+     * remaining time.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>Unlike with a queue, when you change the visibility
-     * timeout for a specific message, that timeout value is applied immediately
-     * but is not saved in memory for that message. If you don't delete a
-     * message after it is received, the visibility timeout for the message the
-     * next time it is received reverts to the original timeout value, not the
-     * value you set with the ChangeMessageVisibility action.
+     * Unlike with a queue, when you change the visibility timeout for a specific message the timeout value is applied
+     * immediately but isn't saved in memory for that message. If you don't delete a message after it is received, the
+     * visibility timeout for the message reverts to the original timeout value (not to the value you set using the
+     * <code>ChangeMessageVisibility</code> action) the next time the message is received.
      * </p>
+     * </important>
      *
      * @param changeMessageVisibilityRequest
-     *            Container for the necessary parameters to execute the
-     *            ChangeMessageVisibility service method on AmazonSQS.
-     *
-     *
-     * @throws ReceiptHandleIsInvalidException
+     * @return Result of the ChangeMessageVisibility operation returned by the service.
      * @throws MessageNotInflightException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified message isn't in flight.
+     * @throws ReceiptHandleIsInvalidException
+     *         The specified receipt handle isn't valid.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ChangeMessageVisibility
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibility" target="_top">AWS
+     *      API Documentation</a>
      */
-    public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+    public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
             throws AmazonServiceException, AmazonClientException {
 
-        if (isS3ReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle())) {
-            changeMessageVisibilityRequest.setReceiptHandle(
-                    getOrigReceiptHandle(changeMessageVisibilityRequest.getReceiptHandle()));
+        ChangeMessageVisibilityRequest.Builder changeMessageVisibilityRequestBuilder = changeMessageVisibilityRequest.toBuilder();
+        if (isS3ReceiptHandle(changeMessageVisibilityRequest.receiptHandle())) {
+            changeMessageVisibilityRequestBuilder.receiptHandle(
+                    getOrigReceiptHandle(changeMessageVisibilityRequest.receiptHandle()));
         }
-        return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
+        return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequestBuilder.build());
     }
 
     /**
      * <p>
-     * Delivers up to ten messages to the specified queue. This is a batch
-     * version of SendMessage. The result of the send action on each message is
-     * reported individually in the response. Uploads message payloads to Amazon
-     * S3 when necessary.
+     * Delivers up to ten messages to the specified queue. This is a batch version of <code> <a>SendMessage</a>.</code>
+     * For a FIFO queue, multiple messages within a single batch are enqueued in the order they are sent.
      * </p>
      * <p>
-     * If the <code>DelaySeconds</code> parameter is not specified for an entry,
-     * the default for the queue is used.
+     * The result of sending each message is reported individually in the response. Because the batch request can result
+     * in a combination of successful and unsuccessful actions, you should check for batch errors even when the call
+     * returns an HTTP status code of <code>200</code>.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>The following list shows the characters (in Unicode)
-     * that are allowed in your message, according to the W3C XML specification.
-     * For more information, go to http://www.faqs.org/rfcs/rfc1321.html. If you
-     * send any characters that are not included in the list, your request will
-     * be rejected. #x9 | #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] |
-     * [#x10000 to #x10FFFF]
+     * The maximum allowed individual message size and the maximum total payload size (the sum of the individual lengths
+     * of all of the batched messages) are both 256 KB (262,144 bytes).
+     * </p>
+     * <important>
+     * <p>
+     * A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed:
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <b>IMPORTANT:</b> The input object may be modified by the method. </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
+     * <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> |
+     * <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>
      * </p>
      * <p>
-     * <code>&Attribute.1=this</code>
+     * Any characters not included in this list will be rejected. For more information, see the <a
+     * href="http://www.w3.org/TR/REC-xml/#charsets">W3C specification for characters</a>.
+     * </p>
+     * </important>
+     * <p>
+     * If you don't specify the <code>DelaySeconds</code> parameter for an entry, Amazon SQS uses the default value for
+     * the queue.
      * </p>
      * <p>
-     * <code>&Attribute.2=that</code>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
+     * </p>
+     * <p>
+     * <code>&amp;AttributeName.1=first</code>
+     * </p>
+     * <p>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param sendMessageBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            SendMessageBatch service method on AmazonSQS.
-     *
-     * @return The response from the SendMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the SendMessageBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws BatchRequestTooLongException
-     * @throws UnsupportedOperationException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws BatchRequestTooLongException
+     *         The length of all the messages put together is more than the limit.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws UnsupportedOperationException
+     *         Error code 400. Unsupported operation.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.SendMessageBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessageBatch" target="_top">AWS API
+     *      Documentation</a>
      */
-    public SendMessageBatchResult sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest) {
+    public SendMessageBatchResponse sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest) {
 
         if (sendMessageBatchRequest == null) {
             String errorMessage = "sendMessageBatchRequest cannot be null.";
@@ -762,23 +571,27 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        sendMessageBatchRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequest.toBuilder();
+        sendMessageBatchRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
+        sendMessageBatchRequest = sendMessageBatchRequestBuilder.build();
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.sendMessageBatch(sendMessageBatchRequest);
         }
 
-        List<SendMessageBatchRequestEntry> batchEntries = sendMessageBatchRequest.getEntries();
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>(sendMessageBatchRequest.entries().size());
 
-        int index = 0;
-        for (SendMessageBatchRequestEntry entry : batchEntries) {
+        for (SendMessageBatchRequestEntry entry : sendMessageBatchRequest.entries()) {
             //Check message attributes for ExtendedClient related constraints
-            checkMessageAttributes(entry.getMessageAttributes());
+            checkMessageAttributes(entry.messageAttributes());
 
             if (clientConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
-                batchEntries.set(index, storeMessageInS3(entry));
+                entry = storeMessageInS3(entry);
             }
-            ++index;
+            batchEntries.add(entry);
         }
 
         return super.sendMessageBatch(sendMessageBatchRequest);
@@ -786,115 +599,49 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     /**
      * <p>
-     * Delivers up to ten messages to the specified queue. This is a batch
-     * version of SendMessage. The result of the send action on each message is
-     * reported individually in the response. Uploads message payloads to Amazon
-     * S3 when necessary.
+     * Deletes up to ten messages from the specified queue. This is a batch version of
+     * <code> <a>DeleteMessage</a>.</code> The result of the action on each message is reported individually in the
+     * response.
+     * </p>
+     * <important>
+     * <p>
+     * Because the batch request can result in a combination of successful and unsuccessful actions, you should check
+     * for batch errors even when the call returns an HTTP status code of <code>200</code>.
+     * </p>
+     * </important>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * If the <code>DelaySeconds</code> parameter is not specified for an entry,
-     * the default for the queue is used.
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>The following list shows the characters (in Unicode)
-     * that are allowed in your message, according to the W3C XML specification.
-     * For more information, go to http://www.faqs.org/rfcs/rfc1321.html. If you
-     * send any characters that are not included in the list, your request will
-     * be rejected. #x9 | #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] |
-     * [#x10000 to #x10FFFF]
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param entries
-     *            A list of <a>SendMessageBatchRequestEntry</a> items.
-     *
-     * @return The response from the SendMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
-     * @throws TooManyEntriesInBatchRequestException
-     * @throws BatchRequestTooLongException
-     * @throws UnsupportedOperationException
-     * @throws InvalidBatchEntryIdException
-     * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public SendMessageBatchResult sendMessageBatch(String queueUrl, List<SendMessageBatchRequestEntry> entries) {
-        SendMessageBatchRequest sendMessageBatchRequest = new SendMessageBatchRequest(queueUrl, entries);
-        return sendMessageBatch(sendMessageBatchRequest);
-    }
-
-    /**
-     * <p>
-     * Deletes up to ten messages from the specified queue. This is a batch
-     * version of DeleteMessage. The result of the delete action on each message
-     * is reported individually in the response. Also deletes the message
-     * payloads from Amazon S3 when necessary.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param deleteMessageBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            DeleteMessageBatch service method on AmazonSQS.
-     *
-     * @return The response from the DeleteMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the DeleteMessageBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.DeleteMessageBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessageBatch" target="_top">AWS API
+     *      Documentation</a>
      */
-    public DeleteMessageBatchResult deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest) {
+    public DeleteMessageBatchResponse deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest) {
 
         if (deleteMessageBatchRequest == null) {
             String errorMessage = "deleteMessageBatchRequest cannot be null.";
@@ -902,14 +649,20 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        deleteMessageBatchRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        DeleteMessageBatchRequest.Builder deleteMessageBatchRequestBuilder = deleteMessageBatchRequest.toBuilder();
+        deleteMessageBatchRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.deleteMessageBatch(deleteMessageBatchRequest);
         }
 
-        for (DeleteMessageBatchRequestEntry entry : deleteMessageBatchRequest.getEntries()) {
-            String receiptHandle = entry.getReceiptHandle();
+        List<DeleteMessageBatchRequestEntry> entries = new ArrayList<>(deleteMessageBatchRequest.entries().size());
+        for (DeleteMessageBatchRequestEntry entry : deleteMessageBatchRequest.entries()) {
+            DeleteMessageBatchRequestEntry.Builder entryBuilder = entry.toBuilder();
+            String receiptHandle = entry.receiptHandle();
             String origReceiptHandle = receiptHandle;
 
             // Update original receipt handle if needed
@@ -922,171 +675,117 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 }
             }
 
-            entry.setReceiptHandle(origReceiptHandle);
+            entryBuilder.receiptHandle(origReceiptHandle);
+            entries.add(entryBuilder.build());
         }
-        return super.deleteMessageBatch(deleteMessageBatchRequest);
+
+        deleteMessageBatchRequestBuilder.entries(entries);
+        return super.deleteMessageBatch(deleteMessageBatchRequestBuilder.build());
     }
 
     /**
      * <p>
-     * Deletes up to ten messages from the specified queue. This is a batch
-     * version of DeleteMessage. The result of the delete action on each message
-     * is reported individually in the response. Also deletes the message
-     * payloads from Amazon S3 when necessary.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param entries
-     *            A list of receipt handles for the messages to be deleted.
-     *
-     * @return The response from the DeleteMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
-     * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
-     * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public DeleteMessageBatchResult deleteMessageBatch(String queueUrl, List<DeleteMessageBatchRequestEntry> entries) {
-        DeleteMessageBatchRequest deleteMessageBatchRequest = new DeleteMessageBatchRequest(queueUrl, entries);
-        return deleteMessageBatch(deleteMessageBatchRequest);
-    }
-
-    /**
-     * Simplified method form for invoking the ChangeMessageVisibilityBatch
-     * operation.
-     *
-     * @see #changeMessageVisibilityBatch(ChangeMessageVisibilityBatchRequest)
-     */
-    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
-            String queueUrl,
-            java.util.List<ChangeMessageVisibilityBatchRequestEntry> entries) {
-        ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest =
-                new ChangeMessageVisibilityBatchRequest(queueUrl, entries);
-        return changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
-    }
-
-    /**
-     * <p>
-     * Changes the visibility timeout of multiple messages. This is a batch
-     * version of ChangeMessageVisibility. The result of the action on each
-     * message is reported individually in the response. You can send up to 10
-     * ChangeMessageVisibility requests with each
+     * Changes the visibility timeout of multiple messages. This is a batch version of
+     * <code> <a>ChangeMessageVisibility</a>.</code> The result of the action on each message is reported individually
+     * in the response. You can send up to 10 <code> <a>ChangeMessageVisibility</a> </code> requests with each
      * <code>ChangeMessageVisibilityBatch</code> action.
      * </p>
+     * <important>
      * <p>
-     * <b>IMPORTANT:</b>Because the batch request can result in a combination of
-     * successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
+     * Because the batch request can result in a combination of successful and unsuccessful actions, you should check
+     * for batch errors even when the call returns an HTTP status code of <code>200</code>.
+     * </p>
+     * </important>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param changeMessageVisibilityBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            ChangeMessageVisibilityBatch service method on AmazonSQS.
-     *
-     * @return The response from the ChangeMessageVisibilityBatch service
-     *         method, as returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the ChangeMessageVisibilityBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ChangeMessageVisibilityBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibilityBatch"
+     *      target="_top">AWS API Documentation</a>
      */
-    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+    public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(
             ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException,
             AmazonClientException {
 
-        for (ChangeMessageVisibilityBatchRequestEntry entry : changeMessageVisibilityBatchRequest.getEntries()) {
-            if (isS3ReceiptHandle(entry.getReceiptHandle())) {
-                entry.setReceiptHandle(getOrigReceiptHandle(entry.getReceiptHandle()));
+        List<ChangeMessageVisibilityBatchRequestEntry> entries = new ArrayList<>(changeMessageVisibilityBatchRequest.entries().size());
+        for (ChangeMessageVisibilityBatchRequestEntry entry : changeMessageVisibilityBatchRequest.entries()) {
+            ChangeMessageVisibilityBatchRequestEntry.Builder entryBuilder = entry.toBuilder();
+            if (isS3ReceiptHandle(entry.receiptHandle())) {
+                entryBuilder.receiptHandle(getOrigReceiptHandle(entry.receiptHandle()));
             }
+            entries.add(entryBuilder.build());
         }
 
-        return amazonSqsToBeExtended.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
+        return amazonSqsToBeExtended.changeMessageVisibilityBatch(
+            changeMessageVisibilityBatchRequest.toBuilder().entries(entries).build());
     }
 
     /**
      * <p>
-     * Deletes the messages in a queue specified by the <b>queue URL</b> .
+     * Deletes the messages in a queue specified by the <code>QueueURL</code> parameter.
+     * </p>
+     * <important>
+     * <p>
+     * When you use the <code>PurgeQueue</code> action, you can't retrieve any messages deleted from a queue.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
-     * the queue cannot be retrieved.
+     * The message deletion process takes up to 60 seconds. We recommend waiting for 60 seconds regardless of your
+     * queue's size.
+     * </p>
+     * </important>
+     * <p>
+     * Messages sent to the queue <i>before</i> you call <code>PurgeQueue</code> might be received but are deleted
+     * within the next minute.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> This does not delete the message payloads from Amazon S3.
-     * </p>
-     * <p>
-     * When you purge a queue, the message deletion process takes up to 60
-     * seconds. All messages sent to the queue before calling
-     * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
-     * it is being purged may be deleted. While the queue is being purged,
-     * messages sent to the queue before <code>PurgeQueue</code> was called may
-     * be received, but will be deleted within the next minute.
+     * Messages sent to the queue <i>after</i> you call <code>PurgeQueue</code> might be deleted while the queue is
+     * being purged.
      * </p>
      *
      * @param purgeQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            PurgeQueue service method on AmazonSQS.
-     * @return The response from the PurgeQueue service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     * @return Result of the PurgeQueue operation returned by the service.
+     * @throws QueueDoesNotExistException
+     *         The specified queue doesn't exist.
+     * @throws PurgeQueueInProgressException
+     *         Indicates that the specified queue previously received a <code>PurgeQueue</code> request within the last
+     *         60 seconds (the time it can take to delete the messages in the queue).
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.PurgeQueue
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/PurgeQueue" target="_top">AWS API
+     *      Documentation</a>
      */
-    public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest)
+    public PurgeQueueResponse purgeQueue(PurgeQueueRequest purgeQueueRequest)
             throws AmazonServiceException, AmazonClientException {
         LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
 
@@ -1096,9 +795,13 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             throw new AmazonClientException(errorMessage);
         }
 
-        purgeQueueRequest.getRequestClientOptions().appendUserAgent(USER_AGENT_HEADER);
+        PurgeQueueRequest.Builder purgeQueueRequestBuilder = purgeQueueRequest.toBuilder();
+        purgeQueueRequestBuilder.overrideConfiguration(
+            AwsRequestOverrideConfiguration.builder()
+                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
+                .build());
 
-        return super.purgeQueue(purgeQueueRequest);
+        return super.purgeQueue(purgeQueueRequestBuilder.build());
     }
 
     private void checkMessageAttributes(Map<String, MessageAttributeValue> messageAttributes) {
@@ -1170,15 +873,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     }
 
     private boolean isLarge(SendMessageRequest sendMessageRequest) {
-        int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.getMessageAttributes());
-        long msgBodySize = Util.getStringSizeInBytes(sendMessageRequest.getMessageBody());
+        int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.messageAttributes());
+        long msgBodySize = Util.getStringSizeInBytes(sendMessageRequest.messageBody());
         long totalMsgSize = msgAttributesSize + msgBodySize;
         return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
     }
 
     private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
-        int msgAttributesSize = getMsgAttributesSize(batchEntry.getMessageAttributes());
-        long msgBodySize = Util.getStringSizeInBytes(batchEntry.getMessageBody());
+        int msgAttributesSize = getMsgAttributesSize(batchEntry.messageAttributes());
+        long msgBodySize = Util.getStringSizeInBytes(batchEntry.messageBody());
         long totalMsgSize = msgAttributesSize + msgBodySize;
         return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
     }
@@ -1195,22 +898,22 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     private int getMsgAttributesSize(Map<String, MessageAttributeValue> msgAttributes) {
         int totalMsgAttributesSize = 0;
-        for (Entry<String, MessageAttributeValue> entry : msgAttributes.entrySet()) {
+        for (Map.Entry<String, MessageAttributeValue> entry : msgAttributes.entrySet()) {
             totalMsgAttributesSize += Util.getStringSizeInBytes(entry.getKey());
 
             MessageAttributeValue entryVal = entry.getValue();
-            if (entryVal.getDataType() != null) {
-                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.getDataType());
+            if (entryVal.dataType() != null) {
+                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.dataType());
             }
 
-            String stringVal = entryVal.getStringValue();
+            String stringVal = entryVal.stringValue();
             if (stringVal != null) {
-                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.getStringValue());
+                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.stringValue());
             }
 
-            ByteBuffer binaryVal = entryVal.getBinaryValue();
+            SdkBytes binaryVal = entryVal.binaryValue();
             if (binaryVal != null) {
-                totalMsgAttributesSize += binaryVal.array().length;
+                totalMsgAttributesSize += binaryVal.asByteArray().length;
             }
         }
         return totalMsgAttributesSize;
@@ -1219,57 +922,58 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     private SendMessageBatchRequestEntry storeMessageInS3(SendMessageBatchRequestEntry batchEntry) {
 
         // Read the content of the message from message body
-        String messageContentStr = batchEntry.getMessageBody();
+        String messageContentStr = batchEntry.messageBody();
 
         Long messageContentSize = Util.getStringSizeInBytes(messageContentStr);
 
-        // Add a new message attribute as a flag
-        MessageAttributeValue messageAttributeValue = new MessageAttributeValue();
-        messageAttributeValue.setDataType("Number");
-        messageAttributeValue.setStringValue(messageContentSize.toString());
+        SendMessageBatchRequestEntry.Builder batchEntryBuilder = batchEntry.toBuilder();
 
-        if (!clientConfiguration.usesLegacyReservedAttributeName()) {
-            batchEntry.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
-                    messageAttributeValue);
-        } else {
-            batchEntry.addMessageAttributesEntry(LEGACY_RESERVED_ATTRIBUTE_NAME,
-                    messageAttributeValue);
-        }
+        batchEntryBuilder.messageAttributes(
+            updateMessageAttributePayloadSize(batchEntry.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
         String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
                 messageContentSize);
-        batchEntry.setMessageBody(largeMessagePointer);
+        batchEntryBuilder.messageBody(largeMessagePointer);
 
-        return batchEntry;
+        return batchEntryBuilder.build();
     }
 
     private SendMessageRequest storeMessageInS3(SendMessageRequest sendMessageRequest) {
 
         // Read the content of the message from message body
-        String messageContentStr = sendMessageRequest.getMessageBody();
+        String messageContentStr = sendMessageRequest.messageBody();
 
         Long messageContentSize = Util.getStringSizeInBytes(messageContentStr);
 
-        // Add a new message attribute as a flag
-        MessageAttributeValue messageAttributeValue = new MessageAttributeValue();
-        messageAttributeValue.setDataType("Number");
-        messageAttributeValue.setStringValue(messageContentSize.toString());
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
 
-        if (!clientConfiguration.usesLegacyReservedAttributeName()) {
-            sendMessageRequest.addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME,
-                    messageAttributeValue);
-        } else {
-            sendMessageRequest.addMessageAttributesEntry(LEGACY_RESERVED_ATTRIBUTE_NAME,
-                    messageAttributeValue);
-        }
+        sendMessageRequestBuilder.messageAttributes(
+            updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
         String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
                 messageContentSize);
-        sendMessageRequest.setMessageBody(largeMessagePointer);
+        sendMessageRequestBuilder.messageBody(largeMessagePointer);
 
-        return sendMessageRequest;
+        return sendMessageRequestBuilder.build();
     }
 
+    private Map<String, MessageAttributeValue> updateMessageAttributePayloadSize(
+        Map<String, MessageAttributeValue> messageAttributes, Long messageContentSize) {
+        Map<String, MessageAttributeValue> updatedMessageAttributes = new HashMap<>(messageAttributes);
+
+        // Add a new message attribute as a flag
+        MessageAttributeValue.Builder messageAttributeValueBuilder = MessageAttributeValue.builder();
+        messageAttributeValueBuilder.dataType("Number");
+        messageAttributeValueBuilder.stringValue(messageContentSize.toString());
+        MessageAttributeValue messageAttributeValue = messageAttributeValueBuilder.build();
+
+        if (!clientConfiguration.usesLegacyReservedAttributeName()) {
+            updatedMessageAttributes.put(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
+        } else {
+            updatedMessageAttributes.put(LEGACY_RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
+        }
+        return updatedMessageAttributes;
+    }
 }
