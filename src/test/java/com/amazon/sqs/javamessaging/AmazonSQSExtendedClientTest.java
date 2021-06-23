@@ -38,7 +38,16 @@ import software.amazon.awssdk.utils.ImmutableMap;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
 
 /**
  * Tests the AmazonSQSExtendedClient class.
@@ -522,6 +531,24 @@ public class AmazonSQSExtendedClientTest {
             originalReceiptHandles.get(i),
             request.entries().get(i).receiptHandle()));
         verify(mockS3, times(batchSize)).deleteObject(eq(S3_BUCKET_NAME), anyString());
+    }
+
+    @Test
+    public void testWhenSendMessageWIthCannedAccessControlListDefined() {
+        CannedAccessControlList expected = CannedAccessControlList.BucketOwnerFullControl;
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withCannedAccessControlList(expected);
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+        sqsExtended.sendMessage(messageRequest);
+
+        ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+
+        verify(mockS3).putObject(captor.capture());
+
+        Assert.assertEquals(expected, captor.getValue().getCannedAcl());
     }
 
     private void testReceiveMessage_when_MessageIsLarge(String reservedAttributeName) throws Exception {

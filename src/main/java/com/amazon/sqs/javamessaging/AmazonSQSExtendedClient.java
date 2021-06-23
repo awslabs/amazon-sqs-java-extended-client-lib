@@ -97,9 +97,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     public AmazonSQSExtendedClient(SqsClient sqsClient, ExtendedClientConfiguration extendedClientConfig) {
         super(sqsClient);
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
-        S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client());
-        this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName(),
-                clientConfiguration.getSSEAwsKeyManagementParams());
+        S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client(),
+                clientConfiguration.getSSEAwsKeyManagementParams(),
+                clientConfiguration.getCannedAccessControlList());
+        this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
     }
 
     /**
@@ -299,6 +300,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
             if (largePayloadAttributeName.isPresent()) {
                 String largeMessagePointer = message.body();
+                largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
 
                 messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
 
