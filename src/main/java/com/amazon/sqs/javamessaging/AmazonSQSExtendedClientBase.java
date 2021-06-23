@@ -15,546 +15,301 @@
 
 package com.amazon.sqs.javamessaging;
 
+import java.lang.UnsupportedOperationException;
+
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.ResponseMetadata;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.regions.Region;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.AddPermissionRequest;
-import com.amazonaws.services.sqs.model.AddPermissionResult;
-import com.amazonaws.services.sqs.model.BatchEntryIdsNotDistinctException;
-import com.amazonaws.services.sqs.model.BatchRequestTooLongException;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.CreateQueueResult;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageResult;
-import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.DeleteQueueResult;
-import com.amazonaws.services.sqs.model.EmptyBatchRequestException;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.GetQueueUrlRequest;
-import com.amazonaws.services.sqs.model.GetQueueUrlResult;
-import com.amazonaws.services.sqs.model.InvalidAttributeNameException;
-import com.amazonaws.services.sqs.model.InvalidBatchEntryIdException;
-import com.amazonaws.services.sqs.model.InvalidIdFormatException;
-import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
-import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesRequest;
-import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesResult;
-import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
-import com.amazonaws.services.sqs.model.ListQueueTagsResult;
-import com.amazonaws.services.sqs.model.ListQueuesRequest;
-import com.amazonaws.services.sqs.model.ListQueuesResult;
-import com.amazonaws.services.sqs.model.MessageNotInflightException;
-import com.amazonaws.services.sqs.model.OverLimitException;
-import com.amazonaws.services.sqs.model.PurgeQueueInProgressException;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.PurgeQueueResult;
-import com.amazonaws.services.sqs.model.QueueDeletedRecentlyException;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.QueueNameExistsException;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.RemovePermissionRequest;
-import com.amazonaws.services.sqs.model.RemovePermissionResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.TagQueueRequest;
-import com.amazonaws.services.sqs.model.TagQueueResult;
-import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
-import com.amazonaws.services.sqs.model.UntagQueueRequest;
-import com.amazonaws.services.sqs.model.UntagQueueResult;
 
-import java.util.List;
-import java.util.Map;
+import software.amazon.awssdk.core.exception.*;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
 
-abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
-    AmazonSQS amazonSqsToBeExtended;
+abstract class AmazonSQSExtendedClientBase implements SqsClient {
+    SqsClient amazonSqsToBeExtended;
 
-    public AmazonSQSExtendedClientBase(AmazonSQS sqsClient) {
+    public AmazonSQSExtendedClientBase(SqsClient sqsClient) {
         amazonSqsToBeExtended = sqsClient;
     }
 
     /**
      * <p>
-     * Delivers a message to the specified queue. With Amazon SQS, you now
-     * have the ability to send large payload messages that are up to 256KB
-     * (262,144 bytes) in size. To send large payloads, you must use an AWS
-     * SDK that supports SigV4 signing. To verify whether SigV4 is supported
-     * for an AWS SDK, check the SDK release notes.
+     * Delivers a message to the specified queue.
+     * </p>
+     * <important>
+     * <p>
+     * A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed:
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> The following list shows the characters (in
-     * Unicode) allowed in your message, according to the W3C XML
-     * specification. For more information, go to
-     * http://www.w3.org/TR/REC-xml/#charsets If you send any characters not
-     * included in the list, your request will be rejected. #x9 | #xA | #xD |
-     * [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
+     * <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> |
+     * <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>
      * </p>
+     * <p>
+     * Any characters not included in this list will be rejected. For more information, see the <a
+     * href="http://www.w3.org/TR/REC-xml/#charsets">W3C specification for characters</a>.
+     * </p>
+     * </important>
      *
-     * @param sendMessageRequest Container for the necessary parameters to
-     *           execute the SendMessage service method on AmazonSQS.
-     *
-     * @return The response from the SendMessage service method, as returned
-     *         by AmazonSQS.
-     *
+     * @param sendMessageRequest
+     * @return Result of the SendMessage operation returned by the service.
      * @throws InvalidMessageContentsException
+     *         The message contains characters outside the allowed set.
      * @throws UnsupportedOperationException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client while
-     *             attempting to make the request or handle the response.  For example
-     *             if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server side issue.
+     *         Error code 400. Unsupported operation.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.SendMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public SendMessageResult sendMessage(SendMessageRequest sendMessageRequest) {
+    public SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) {
         return amazonSqsToBeExtended.sendMessage(sendMessageRequest);
     }
 
     /**
      * <p>
-     * Retrieves one or more messages, with a maximum limit of 10 messages,
-     * from the specified queue. Long poll support is enabled by using the
-     * <code>WaitTimeSeconds</code> parameter. For more information, see
-     * <a href="http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html"> Amazon SQS Long Poll </a>
-     * in the <i>Amazon SQS Developer Guide</i> .
+     * Retrieves one or more messages (up to 10), from the specified queue. Using the <code>WaitTimeSeconds</code>
+     * parameter enables long-poll support. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html">Amazon
+     * SQS Long Polling</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * Short poll is the default behavior where a weighted random set of
-     * machines is sampled on a <code>ReceiveMessage</code> call. This means
-     * only the messages on the sampled machines are returned. If the number
-     * of messages in the queue is small (less than 1000), it is likely you
-     * will get fewer messages than you requested per
-     * <code>ReceiveMessage</code> call. If the number of messages in the
-     * queue is extremely small, you might not receive any messages in a
-     * particular <code>ReceiveMessage</code> response; in which case you
-     * should repeat the request.
+     * Short poll is the default behavior where a weighted random set of machines is sampled on a
+     * <code>ReceiveMessage</code> call. Thus, only the messages on the sampled machines are returned. If the number of
+     * messages in the queue is small (fewer than 1,000), you most likely get fewer messages than you requested per
+     * <code>ReceiveMessage</code> call. If the number of messages in the queue is extremely small, you might not
+     * receive any messages in a particular <code>ReceiveMessage</code> response. If this happens, repeat the request.
      * </p>
      * <p>
      * For each message returned, the response includes the following:
      * </p>
-     *
      * <ul>
-     * <li> <p>
-     * Message body
+     * <li>
+     * <p>
+     * The message body.
      * </p>
      * </li>
-     * <li> <p>
-     * MD5 digest of the message body. For information about MD5, go to
-     * <a href="http://www.faqs.org/rfcs/rfc1321.html"> http://www.faqs.org/rfcs/rfc1321.html </a>
-     * .
+     * <li>
+     * <p>
+     * An MD5 digest of the message body. For information about MD5, see <a
+     * href="https://www.ietf.org/rfc/rfc1321.txt">RFC1321</a>.
      * </p>
      * </li>
-     * <li> <p>
-     * Message ID you received when you sent the message to the queue.
+     * <li>
+     * <p>
+     * The <code>MessageId</code> you received when you sent the message to the queue.
      * </p>
      * </li>
-     * <li> <p>
-     * Receipt handle.
+     * <li>
+     * <p>
+     * The receipt handle.
      * </p>
      * </li>
-     * <li> <p>
-     * Message attributes.
+     * <li>
+     * <p>
+     * The message attributes.
      * </p>
      * </li>
-     * <li> <p>
-     * MD5 digest of the message attributes.
+     * <li>
+     * <p>
+     * An MD5 digest of the message attributes.
      * </p>
      * </li>
-     *
      * </ul>
      * <p>
-     * The receipt handle is the identifier you must provide when deleting
-     * the message. For more information, see
-     * <a href="http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ImportantIdentifiers.html"> Queue and Message Identifiers </a>
-     * in the <i>Amazon SQS Developer Guide</i> .
+     * The receipt handle is the identifier you must provide when deleting the message. For more information, see <a
+     * href
+     * ="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html"
+     * >Queue and Message Identifiers</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * You can provide the <code>VisibilityTimeout</code> parameter in your
-     * request, which will be applied to the messages that Amazon SQS returns
-     * in the response. If you do not include the parameter, the overall
-     * visibility timeout for the queue is used for the returned messages.
-     * For more information, see
-     * <a href="http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"> Visibility Timeout </a>
-     * in the <i>Amazon SQS Developer Guide</i> .
+     * You can provide the <code>VisibilityTimeout</code> parameter in your request. The parameter is applied to the
+     * messages that Amazon SQS returns in the response. If you don't include the parameter, the overall visibility
+     * timeout for the queue is used for the returned messages. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+     * >Visibility Timeout</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * <b>NOTE:</b> Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure
-     * your code so that it can handle new attributes gracefully.
+     * A message that isn't deleted or a message whose visibility isn't extended before the visibility timeout expires
+     * counts as a failed receive. Depending on the configuration of the queue, the message might be sent to the
+     * dead-letter queue.
      * </p>
+     * <note>
+     * <p>
+     * In the future, new attributes might be added. If you write code that calls this action, we recommend that you
+     * structure your code so that it can handle new attributes gracefully.
+     * </p>
+     * </note>
      *
-     * @param receiveMessageRequest Container for the necessary parameters to
-     *           execute the ReceiveMessage service method on AmazonSQS.
-     *
-     * @return The response from the ReceiveMessage service method, as
-     *         returned by AmazonSQS.
-     *
+     * @param receiveMessageRequest
+     * @return Result of the ReceiveMessage operation returned by the service.
      * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client while
-     *             attempting to make the request or handle the response.  For example
-     *             if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server side issue.
+     *         The specified action violates a limit. For example, <code>ReceiveMessage</code> returns this error if the
+     *         maximum number of inflight messages is reached and <code>AddPermission</code> returns this error if the
+     *         maximum number of permissions for the queue is reached.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ReceiveMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ReceiveMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public ReceiveMessageResult receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
+    public ReceiveMessageResponse receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
         return amazonSqsToBeExtended.receiveMessage(receiveMessageRequest);
     }
 
     /**
      * <p>
-     * Deletes the specified message from the specified queue. You specify
-     * the message by using the message's <code>receipt handle</code> and not
-     * the <code>message ID</code> you received when you sent the message.
-     * Even if the message is locked by another reader due to the visibility
-     * timeout setting, it is still deleted from the queue. If you leave a
-     * message in the queue for longer than the queue's configured retention
-     * period, Amazon SQS automatically deletes it.
+     * Deletes the specified message from the specified queue. To select the message to delete, use the
+     * <code>ReceiptHandle</code> of the message (<i>not</i> the <code>MessageId</code> which you receive when you send
+     * the message). Amazon SQS can delete a message from a queue even if a visibility timeout setting causes the
+     * message to be locked by another consumer. Amazon SQS automatically deletes messages left in a queue longer than
+     * the retention period configured for the queue.
+     * </p>
+     * <note>
+     * <p>
+     * The <code>ReceiptHandle</code> is associated with a <i>specific instance</i> of receiving a message. If you
+     * receive a message more than once, the <code>ReceiptHandle</code> is different each time you receive a message.
+     * When you use the <code>DeleteMessage</code> action, you must provide the most recently received
+     * <code>ReceiptHandle</code> for the message (otherwise, the request succeeds, but the message might not be
+     * deleted).
      * </p>
      * <p>
-     * <b>NOTE:</b> The receipt handle is associated with a specific
-     * instance of receiving the message. If you receive a message more than
-     * once, the receipt handle you get each time you receive the message is
-     * different. When you request DeleteMessage, if you don't provide the
-     * most recently received receipt handle for the message, the request
-     * will still succeed, but the message might not be deleted.
+     * For standard queues, it is possible to receive a message even after you delete it. This might happen on rare
+     * occasions if one of the servers which stores a copy of the message is unavailable when you send the request to
+     * delete the message. The copy remains on the server and might be returned to you during a subsequent receive
+     * request. You should ensure that your application is idempotent, so that receiving a message more than once does
+     * not cause issues.
      * </p>
-     * <p>
-     * <b>IMPORTANT:</b> It is possible you will receive a message even
-     * after you have deleted it. This might happen on rare occasions if one
-     * of the servers storing a copy of the message is unavailable when you
-     * request to delete the message. The copy remains on the server and
-     * might be returned to you again on a subsequent receive request. You
-     * should create your system to be idempotent so that receiving a
-     * particular message more than once is not a problem.
-     * </p>
+     * </note>
      *
-     * @param deleteMessageRequest Container for the necessary parameters to
-     *           execute the DeleteMessage service method on AmazonSQS.
-     *
-     * @return The response from the DeleteMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws ReceiptHandleIsInvalidException
+     * @param deleteMessageRequest
+     * @return Result of the DeleteMessage operation returned by the service.
      * @throws InvalidIdFormatException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client while
-     *             attempting to make the request or handle the response.  For example
-     *             if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server side issue.
+     *         The specified receipt handle isn't valid for the current version.
+     * @throws ReceiptHandleIsInvalidException
+     *         The specified receipt handle isn't valid.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.DeleteMessage
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessage" target="_top">AWS API
+     *      Documentation</a>
      */
-    public DeleteMessageResult deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+    public DeleteMessageResponse deleteMessage(DeleteMessageRequest deleteMessageRequest) {
         return amazonSqsToBeExtended.deleteMessage(deleteMessageRequest);
     }
 
     /**
      * <p>
-     * Delivers a message to the specified queue. With Amazon SQS, you now have
-     * the ability to send large payload messages that are up to 256KB (262,144
-     * bytes) in size. To send large payloads, you must use an AWS SDK that
-     * supports SigV4 signing. To verify whether SigV4 is supported for an AWS
-     * SDK, check the SDK release notes.
+     * Sets the value of one or more queue attributes. When you change a queue's attributes, the change can take up to
+     * 60 seconds for most of the attributes to propagate throughout the Amazon SQS system. Changes made to the
+     * <code>MessageRetentionPeriod</code> attribute can take up to 15 minutes.
      * </p>
-     * <p>
-     * <b>IMPORTANT:</b> The following list shows the characters (in Unicode)
-     * allowed in your message, according to the W3C XML specification. For more
-     * information, go to http://www.w3.org/TR/REC-xml/#charsets If you send any
-     * characters not included in the list, your request will be rejected. #x9 |
-     * #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param messageBody
-     *            The message to send. String maximum 256 KB in size. For a list
-     *            of allowed characters, see the preceding important note.
-     *
-     * @return The response from the SendMessage service method, as returned by
-     *         AmazonSQS.
-     *
-     * @throws InvalidMessageContentsException
-     * @throws UnsupportedOperationException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public SendMessageResult sendMessage(String queueUrl, String messageBody) throws AmazonServiceException,
-            AmazonClientException {
-
-        return amazonSqsToBeExtended.sendMessage(queueUrl, messageBody);
-    }
-
-    /**
-     * <p>
-     * Retrieves one or more messages, with a maximum limit of 10 messages, from
-     * the specified queue. Long poll support is enabled by using the
-     * <code>WaitTimeSeconds</code> parameter. For more information, see <a
-     * href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html"
-     * > Amazon SQS Long Poll </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     * <p>
-     * Short poll is the default behavior where a weighted random set of
-     * machines is sampled on a <code>ReceiveMessage</code> call. This means
-     * only the messages on the sampled machines are returned. If the number of
-     * messages in the queue is small (less than 1000), it is likely you will
-     * get fewer messages than you requested per <code>ReceiveMessage</code>
-     * call. If the number of messages in the queue is extremely small, you
-     * might not receive any messages in a particular
-     * <code>ReceiveMessage</code> response; in which case you should repeat the
-     * request.
-     * </p>
-     * <p>
-     * For each message returned, the response includes the following:
-     * </p>
-     *
+     * <note>
      * <ul>
      * <li>
      * <p>
-     * Message body
+     * In the future, new attributes might be added. If you write code that calls this action, we recommend that you
+     * structure your code so that it can handle new attributes gracefully.
      * </p>
      * </li>
      * <li>
      * <p>
-     * MD5 digest of the message body. For information about MD5, go to <a
-     * href="http://www.faqs.org/rfcs/rfc1321.html">
-     * http://www.faqs.org/rfcs/rfc1321.html </a> .
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
      * </p>
      * </li>
      * <li>
      * <p>
-     * Message ID you received when you sent the message to the queue.
+     * To remove the ability to change queue permissions, you must deny permission to the <code>AddPermission</code>,
+     * <code>RemovePermission</code>, and <code>SetQueueAttributes</code> actions in your IAM policy.
      * </p>
      * </li>
-     * <li>
-     * <p>
-     * Receipt handle.
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * Message attributes.
-     * </p>
-     * </li>
-     * <li>
-     * <p>
-     * MD5 digest of the message attributes.
-     * </p>
-     * </li>
-     *
      * </ul>
-     * <p>
-     * The receipt handle is the identifier you must provide when deleting the
-     * message. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ImportantIdentifiers.html"
-     * > Queue and Message Identifiers </a> in the <i>Amazon SQS Developer
-     * Guide</i> .
-     * </p>
-     * <p>
-     * You can provide the <code>VisibilityTimeout</code> parameter in your
-     * request, which will be applied to the messages that Amazon SQS returns in
-     * the response. If you do not include the parameter, the overall visibility
-     * timeout for the queue is used for the returned messages. For more
-     * information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     * <p>
-     * <b>NOTE:</b> Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     *
-     * @return The response from the ReceiveMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public ReceiveMessageResult receiveMessage(String queueUrl) throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.receiveMessage(queueUrl);
-    }
-
-    /**
-     * <p>
-     * Deletes the specified message from the specified queue. You specify the
-     * message by using the message's <code>receipt handle</code> and not the
-     * <code>message ID</code> you received when you sent the message. Even if
-     * the message is locked by another reader due to the visibility timeout
-     * setting, it is still deleted from the queue. If you leave a message in
-     * the queue for longer than the queue's configured retention period, Amazon
-     * SQS automatically deletes it.
-     * </p>
-     * <p>
-     * <b>NOTE:</b> The receipt handle is associated with a specific instance of
-     * receiving the message. If you receive a message more than once, the
-     * receipt handle you get each time you receive the message is different.
-     * When you request DeleteMessage, if you don't provide the most recently
-     * received receipt handle for the message, the request will still succeed,
-     * but the message might not be deleted.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> It is possible you will receive a message even after
-     * you have deleted it. This might happen on rare occasions if one of the
-     * servers storing a copy of the message is unavailable when you request to
-     * delete the message. The copy remains on the server and might be returned
-     * to you again on a subsequent receive request. You should create your
-     * system to be idempotent so that receiving a particular message more than
-     * once is not a problem.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param receiptHandle
-     *            The receipt handle associated with the message to delete.
-     *
-     * @return The response from the DeleteMessage service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws ReceiptHandleIsInvalidException
-     * @throws InvalidIdFormatException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public DeleteMessageResult deleteMessage(String queueUrl, String receiptHandle)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.deleteMessage(queueUrl, receiptHandle);
-    }
-
-    /**
-     * <p>
-     * Sets the value of one or more queue attributes. When you change a queue's
-     * attributes, the change can take up to 60 seconds for most of the
-     * attributes to propagate throughout the SQS system. Changes made to the
-     * <code>MessageRetentionPeriod</code> attribute can take up to 15 minutes.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
-     * </p>
+     * </note>
      *
      * @param setQueueAttributesRequest
-     *            Container for the necessary parameters to execute the
-     *            SetQueueAttributes service method on AmazonSQS.
-     *
-     *
+     * @return Result of the SetQueueAttributes operation returned by the service.
      * @throws InvalidAttributeNameException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified attribute doesn't exist.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.SetQueueAttributes
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SetQueueAttributes" target="_top">AWS API
+     *      Documentation</a>
      */
-    public SetQueueAttributesResult setQueueAttributes(SetQueueAttributesRequest setQueueAttributesRequest)
+    public SetQueueAttributesResponse setQueueAttributes(SetQueueAttributesRequest setQueueAttributesRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.setQueueAttributes(setQueueAttributesRequest);
-
     }
 
     /**
      * <p>
-     * Changes the visibility timeout of multiple messages. This is a batch
-     * version of ChangeMessageVisibility. The result of the action on each
-     * message is reported individually in the response. You can send up to 10
-     * ChangeMessageVisibility requests with each
+     * Changes the visibility timeout of multiple messages. This is a batch version of
+     * <code> <a>ChangeMessageVisibility</a>.</code> The result of the action on each message is reported individually
+     * in the response. You can send up to 10 <code> <a>ChangeMessageVisibility</a> </code> requests with each
      * <code>ChangeMessageVisibilityBatch</code> action.
      * </p>
+     * <important>
      * <p>
-     * <b>IMPORTANT:</b>Because the batch request can result in a combination of
-     * successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
+     * Because the batch request can result in a combination of successful and unsuccessful actions, you should check
+     * for batch errors even when the call returns an HTTP status code of <code>200</code>.
+     * </p>
+     * </important>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param changeMessageVisibilityBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            ChangeMessageVisibilityBatch service method on AmazonSQS.
-     *
-     * @return The response from the ChangeMessageVisibilityBatch service
-     *         method, as returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the ChangeMessageVisibilityBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ChangeMessageVisibilityBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibilityBatch"
+     *      target="_top">AWS API Documentation</a>
      */
-    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(
+    public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(
             ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException,
             AmazonClientException {
 
@@ -563,66 +318,91 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Changes the visibility timeout of a specified message in a queue to a new
-     * value. The maximum allowed timeout value you can set the value to is 12
-     * hours. This means you can't extend the timeout of a message in an
-     * existing queue to more than a total visibility timeout of 12 hours. (For
-     * more information visibility timeout, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .)
+     * Changes the visibility timeout of a specified message in a queue to a new value. The default visibility timeout
+     * for a message is 30 seconds. The minimum is 0 seconds. The maximum is 12 hours. For more information, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">
+     * Visibility Timeout</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      * <p>
-     * For example, let's say you have a message and its default message
-     * visibility timeout is 30 minutes. You could call
-     * <code>ChangeMessageVisiblity</code> with a value of two hours and the
-     * effective timeout would be two hours and 30 minutes. When that time comes
-     * near you could again extend the time out by calling
-     * ChangeMessageVisiblity, but this time the maximum allowed timeout would
-     * be 9 hours and 30 minutes.
+     * For example, you have a message with a visibility timeout of 5 minutes. After 3 minutes, you call
+     * <code>ChangeMessageVisibility</code> with a timeout of 10 minutes. You can continue to call
+     * <code>ChangeMessageVisibility</code> to extend the visibility timeout to the maximum allowed time. If you try to
+     * extend the visibility timeout beyond the maximum, your request is rejected.
      * </p>
      * <p>
-     * <b>NOTE:</b> There is a 120,000 limit for the number of inflight messages
-     * per queue. Messages are inflight after they have been received from the
-     * queue by a consuming component, but have not yet been deleted from the
-     * queue. If you reach the 120,000 limit, you will receive an OverLimit
-     * error message from Amazon SQS. To help avoid reaching the limit, you
-     * should delete the messages from the queue after they have been processed.
-     * You can also increase the number of queues you use to process the
-     * messages.
+     * An Amazon SQS message has three basic states:
+     * </p>
+     * <ol>
+     * <li>
+     * <p>
+     * Sent to a queue by a producer.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Received from the queue by a consumer.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Deleted from the queue.
+     * </p>
+     * </li>
+     * </ol>
+     * <p>
+     * A message is considered to be <i>stored</i> after it is sent to a queue by a producer, but not yet received from
+     * the queue by a consumer (that is, between states 1 and 2). There is no limit to the number of stored messages. A
+     * message is considered to be <i>in flight</i> after it is received from a queue by a consumer, but not yet deleted
+     * from the queue (that is, between states 2 and 3). There is a limit to the number of inflight messages.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>If you attempt to set the VisibilityTimeout to an amount
-     * more than the maximum time left, Amazon SQS returns an error. It will not
-     * automatically recalculate and increase the timeout to the maximum time
-     * remaining.
+     * Limits that apply to inflight messages are unrelated to the <i>unlimited</i> number of stored messages.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>Unlike with a queue, when you change the visibility
-     * timeout for a specific message, that timeout value is applied immediately
-     * but is not saved in memory for that message. If you don't delete a
-     * message after it is received, the visibility timeout for the message the
-     * next time it is received reverts to the original timeout value, not the
-     * value you set with the ChangeMessageVisibility action.
+     * For most standard queues (depending on queue traffic and message backlog), there can be a maximum of
+     * approximately 120,000 inflight messages (received from a queue by a consumer, but not yet deleted from the
+     * queue). If you reach this limit, Amazon SQS returns the <code>OverLimit</code> error message. To avoid reaching
+     * the limit, you should delete messages from the queue after they're processed. You can also increase the number of
+     * queues you use to process your messages. To request a limit increase, <a href=
+     * "https://console.aws.amazon.com/support/home#/case/create?issueType=service-limit-increase&amp;limitType=service-code-sqs"
+     * >file a support request</a>.
      * </p>
+     * <p>
+     * For FIFO queues, there can be a maximum of 20,000 inflight messages (received from a queue by a consumer, but not
+     * yet deleted from the queue). If you reach this limit, Amazon SQS returns no error messages.
+     * </p>
+     * <important>
+     * <p>
+     * If you attempt to set the <code>VisibilityTimeout</code> to a value greater than the maximum time left, Amazon
+     * SQS returns an error. Amazon SQS doesn't automatically recalculate and increase the timeout to the maximum
+     * remaining time.
+     * </p>
+     * <p>
+     * Unlike with a queue, when you change the visibility timeout for a specific message the timeout value is applied
+     * immediately but isn't saved in memory for that message. If you don't delete a message after it is received, the
+     * visibility timeout for the message reverts to the original timeout value (not to the value you set using the
+     * <code>ChangeMessageVisibility</code> action) the next time the message is received.
+     * </p>
+     * </important>
      *
      * @param changeMessageVisibilityRequest
-     *            Container for the necessary parameters to execute the
-     *            ChangeMessageVisibility service method on AmazonSQS.
-     *
-     *
-     * @throws ReceiptHandleIsInvalidException
+     * @return Result of the ChangeMessageVisibility operation returned by the service.
      * @throws MessageNotInflightException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified message isn't in flight.
+     * @throws ReceiptHandleIsInvalidException
+     *         The specified receipt handle isn't valid.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ChangeMessageVisibility
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibility" target="_top">AWS
+     *      API Documentation</a>
      */
-    public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
+    public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
@@ -630,38 +410,33 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Returns the URL of an existing queue. This action provides a simple way
-     * to retrieve the URL of an Amazon SQS queue.
+     * Returns the URL of an existing Amazon SQS queue.
      * </p>
      * <p>
-     * To access a queue that belongs to another AWS account, use the
-     * <code>QueueOwnerAWSAccountId</code> parameter to specify the account ID
-     * of the queue's owner. The queue's owner must grant you permission to
-     * access the queue. For more information about shared queue access, see
-     * AddPermission or go to <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/acp-overview.html"
-     * > Shared Queues </a> in the <i>Amazon SQS Developer Guide</i> .
+     * To access a queue that belongs to another AWS account, use the <code>QueueOwnerAWSAccountId</code> parameter to
+     * specify the account ID of the queue's owner. The queue's owner must grant you permission to access the queue. For
+     * more information about shared queue access, see <code> <a>AddPermission</a> </code> or see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-writing-an-sqs-policy.html#write-messages-to-shared-queue"
+     * >Allow Developers to Write Messages to a Shared Queue</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
      * </p>
      *
      * @param getQueueUrlRequest
-     *            Container for the necessary parameters to execute the
-     *            GetQueueUrl service method on AmazonSQS.
-     *
-     * @return The response from the GetQueueUrl service method, as returned by
-     *         AmazonSQS.
-     *
+     * @return Result of the GetQueueUrl operation returned by the service.
      * @throws QueueDoesNotExistException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified queue doesn't exist.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.GetQueueUrl
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/GetQueueUrl" target="_top">AWS API
+     *      Documentation</a>
      */
-    public GetQueueUrlResult getQueueUrl(GetQueueUrlRequest getQueueUrlRequest) throws AmazonServiceException,
+    public GetQueueUrlResponse getQueueUrl(GetQueueUrlRequest getQueueUrlRequest) throws AmazonServiceException,
             AmazonClientException {
 
         return amazonSqsToBeExtended.getQueueUrl(getQueueUrlRequest);
@@ -669,27 +444,46 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Revokes any permissions in the queue policy that matches the specified
-     * <code>Label</code> parameter. Only the owner of the queue can remove
-     * permissions.
+     * Revokes any permissions in the queue policy that matches the specified <code>Label</code> parameter.
      * </p>
+     * <note>
+     * <ul>
+     * <li>
+     * <p>
+     * Only the owner of a queue can remove permissions from it.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * To remove the ability to change queue permissions, you must deny permission to the <code>AddPermission</code>,
+     * <code>RemovePermission</code>, and <code>SetQueueAttributes</code> actions in your IAM policy.
+     * </p>
+     * </li>
+     * </ul>
+     * </note>
      *
      * @param removePermissionRequest
-     *            Container for the necessary parameters to execute the
-     *            RemovePermission service method on AmazonSQS.
-     *
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     * @return Result of the RemovePermission operation returned by the service.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.RemovePermission
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/RemovePermission" target="_top">AWS API
+     *      Documentation</a>
      */
-    public RemovePermissionResult removePermission(RemovePermissionRequest removePermissionRequest)
+    public RemovePermissionResponse removePermission(RemovePermissionRequest removePermissionRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.removePermission(removePermissionRequest);
@@ -697,89 +491,32 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Gets attributes for the specified queue. The following attributes are
-     * supported:
-     * <ul>
-     * <li> <code>All</code> - returns all values.</li>
-     * <li> <code>ApproximateNumberOfMessages</code> - returns the approximate
-     * number of visible messages in a queue. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ApproximateNumber.html"
-     * > Resources Required to Process Messages </a> in the <i>Amazon SQS
-     * Developer Guide</i> .</li>
-     * <li> <code>ApproximateNumberOfMessagesNotVisible</code> - returns the
-     * approximate number of messages that are not timed-out and not deleted.
-     * For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ApproximateNumber.html"
-     * > Resources Required to Process Messages </a> in the <i>Amazon SQS
-     * Developer Guide</i> .</li>
-     * <li> <code>VisibilityTimeout</code> - returns the visibility timeout for
-     * the queue. For more information about visibility timeout, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .</li>
-     * <li> <code>CreatedTimestamp</code> - returns the time when the queue was
-     * created (epoch time in seconds).</li>
-     * <li> <code>LastModifiedTimestamp</code> - returns the time when the queue
-     * was last changed (epoch time in seconds).</li>
-     * <li> <code>Policy</code> - returns the queue's policy.</li>
-     * <li> <code>MaximumMessageSize</code> - returns the limit of how many bytes
-     * a message can contain before Amazon SQS rejects it.</li>
-     * <li> <code>MessageRetentionPeriod</code> - returns the number of seconds
-     * Amazon SQS retains a message.</li>
-     * <li> <code>QueueArn</code> - returns the queue's Amazon resource name
-     * (ARN).</li>
-     * <li> <code>ApproximateNumberOfMessagesDelayed</code> - returns the
-     * approximate number of messages that are pending to be added to the queue.
-     * </li>
-     * <li> <code>DelaySeconds</code> - returns the default delay on the queue in
-     * seconds.</li>
-     * <li> <code>ReceiveMessageWaitTimeSeconds</code> - returns the time for
-     * which a ReceiveMessage call will wait for a message to arrive.</li>
-     * <li> <code>RedrivePolicy</code> - returns the parameters for dead letter
-     * queue functionality of the source queue. For more information about
-     * RedrivePolicy and dead letter queues, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/SQSDeadLetterQueue.html"
-     * > Using Amazon SQS Dead Letter Queues </a> in the <i>Amazon SQS Developer
-     * Guide</i> .</li>
-     *
-     * </ul>
-     *
+     * Gets attributes for the specified queue.
      * </p>
+     * <note>
      * <p>
-     * <b>NOTE:</b>Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
+     * To determine whether a queue is <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html">FIFO</a>, you
+     * can check whether <code>QueueName</code> ends with the <code>.fifo</code> suffix.
      * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
+     * </note>
      *
      * @param getQueueAttributesRequest
-     *            Container for the necessary parameters to execute the
-     *            GetQueueAttributes service method on AmazonSQS.
-     *
-     * @return The response from the GetQueueAttributes service method, as
-     *         returned by AmazonSQS.
-     *
+     * @return Result of the GetQueueAttributes operation returned by the service.
      * @throws InvalidAttributeNameException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified attribute doesn't exist.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.GetQueueAttributes
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/GetQueueAttributes" target="_top">AWS API
+     *      Documentation</a>
      */
-    public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest getQueueAttributesRequest)
+    public GetQueueAttributesResponse getQueueAttributes(GetQueueAttributesRequest getQueueAttributesRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.getQueueAttributes(getQueueAttributesRequest);
@@ -787,68 +524,72 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Delivers up to ten messages to the specified queue. This is a batch
-     * version of SendMessage. The result of the send action on each message is
-     * reported individually in the response. The maximum allowed individual
-     * message size is 256 KB (262,144 bytes).
+     * Delivers up to ten messages to the specified queue. This is a batch version of <code> <a>SendMessage</a>.</code>
+     * For a FIFO queue, multiple messages within a single batch are enqueued in the order they are sent.
      * </p>
      * <p>
-     * The maximum total payload size (i.e., the sum of all a batch's individual
-     * message lengths) is also 256 KB (262,144 bytes).
+     * The result of sending each message is reported individually in the response. Because the batch request can result
+     * in a combination of successful and unsuccessful actions, you should check for batch errors even when the call
+     * returns an HTTP status code of <code>200</code>.
      * </p>
      * <p>
-     * If the <code>DelaySeconds</code> parameter is not specified for an entry,
-     * the default for the queue is used.
+     * The maximum allowed individual message size and the maximum total payload size (the sum of the individual lengths
+     * of all of the batched messages) are both 256 KB (262,144 bytes).
+     * </p>
+     * <important>
+     * <p>
+     * A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed:
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>The following list shows the characters (in Unicode)
-     * that are allowed in your message, according to the W3C XML specification.
-     * For more information, go to http://www.faqs.org/rfcs/rfc1321.html. If you
-     * send any characters that are not included in the list, your request will
-     * be rejected. #x9 | #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] |
-     * [#x10000 to #x10FFFF]
+     * <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> |
+     * <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
+     * Any characters not included in this list will be rejected. For more information, see the <a
+     * href="http://www.w3.org/TR/REC-xml/#charsets">W3C specification for characters</a>.
+     * </p>
+     * </important>
+     * <p>
+     * If you don't specify the <code>DelaySeconds</code> parameter for an entry, Amazon SQS uses the default value for
+     * the queue.
      * </p>
      * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <code>&Attribute.1=this</code>
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <code>&Attribute.2=that</code>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param sendMessageBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            SendMessageBatch service method on AmazonSQS.
-     *
-     * @return The response from the SendMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the SendMessageBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws BatchRequestTooLongException
-     * @throws UnsupportedOperationException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws BatchRequestTooLongException
+     *         The length of all the messages put together is more than the limit.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws UnsupportedOperationException
+     *         Error code 400. Unsupported operation.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.SendMessageBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessageBatch" target="_top">AWS API
+     *      Documentation</a>
      */
-    public SendMessageBatchResult sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest)
+    public SendMessageBatchResponse sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.sendMessageBatch(sendMessageBatchRequest);
@@ -856,39 +597,45 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Deletes the messages in a queue specified by the <b>queue URL</b> .
+     * Deletes the messages in a queue specified by the <code>QueueURL</code> parameter.
+     * </p>
+     * <important>
+     * <p>
+     * When you use the <code>PurgeQueue</code> action, you can't retrieve any messages deleted from a queue.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b>When you use the PurgeQueue API, the deleted messages in
-     * the queue cannot be retrieved.
+     * The message deletion process takes up to 60 seconds. We recommend waiting for 60 seconds regardless of your
+     * queue's size.
+     * </p>
+     * </important>
+     * <p>
+     * Messages sent to the queue <i>before</i> you call <code>PurgeQueue</code> might be received but are deleted
+     * within the next minute.
      * </p>
      * <p>
-     * When you purge a queue, the message deletion process takes up to 60
-     * seconds. All messages sent to the queue before calling
-     * <code>PurgeQueue</code> will be deleted; messages sent to the queue while
-     * it is being purged may be deleted. While the queue is being purged,
-     * messages sent to the queue before <code>PurgeQueue</code> was called may
-     * be received, but will be deleted within the next minute.
+     * Messages sent to the queue <i>after</i> you call <code>PurgeQueue</code> might be deleted while the queue is
+     * being purged.
      * </p>
      *
      * @param purgeQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            PurgeQueue service method on AmazonSQS.
-     *
-     *
-     * @throws PurgeQueueInProgressException
+     * @return Result of the PurgeQueue operation returned by the service.
      * @throws QueueDoesNotExistException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified queue doesn't exist.
+     * @throws PurgeQueueInProgressException
+     *         Indicates that the specified queue previously received a <code>PurgeQueue</code> request within the last
+     *         60 seconds (the time it can take to delete the messages in the queue).
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.PurgeQueue
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/PurgeQueue" target="_top">AWS API
+     *      Documentation</a>
      */
-    public PurgeQueueResult purgeQueue(PurgeQueueRequest purgeQueueRequest)
+    public PurgeQueueResponse purgeQueue(PurgeQueueRequest purgeQueueRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.purgeQueue(purgeQueueRequest);
@@ -897,34 +644,39 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Returns a list of your queues that have the RedrivePolicy queue attribute
-     * configured with a dead letter queue.
+     * Returns a list of your queues that have the <code>RedrivePolicy</code> queue attribute configured with a
+     * dead-letter queue.
      * </p>
      * <p>
-     * For more information about using dead letter queues, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/SQSDeadLetterQueue.html"
-     * > Using Amazon SQS Dead Letter Queues </a> .
+     * The <code>ListDeadLetterSourceQueues</code> methods supports pagination. Set parameter <code>MaxResults</code> in
+     * the request to specify the maximum number of results to be returned in the response. If you do not set
+     * <code>MaxResults</code>, the response includes a maximum of 1,000 results. If you set <code>MaxResults</code> and
+     * there are additional results to display, the response includes a value for <code>NextToken</code>. Use
+     * <code>NextToken</code> as a parameter in your next request to <code>ListDeadLetterSourceQueues</code> to receive
+     * the next page of results.
+     * </p>
+     * <p>
+     * For more information about using dead-letter queues, see <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+     * >Using Amazon SQS Dead-Letter Queues</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
      * </p>
      *
      * @param listDeadLetterSourceQueuesRequest
-     *            Container for the necessary parameters to execute the
-     *            ListDeadLetterSourceQueues service method on AmazonSQS.
-     *
-     * @return The response from the ListDeadLetterSourceQueues service method,
-     *         as returned by AmazonSQS.
-     *
+     * @return Result of the ListDeadLetterSourceQueues operation returned by the service.
      * @throws QueueDoesNotExistException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified queue doesn't exist.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ListDeadLetterSourceQueues
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ListDeadLetterSourceQueues" target="_top">AWS
+     *      API Documentation</a>
      */
-    public ListDeadLetterSourceQueuesResult listDeadLetterSourceQueues(
+    public ListDeadLetterSourceQueuesResponse listDeadLetterSourceQueues(
             ListDeadLetterSourceQueuesRequest listDeadLetterSourceQueuesRequest) throws AmazonServiceException,
             AmazonClientException {
 
@@ -933,46 +685,45 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Deletes the queue specified by the <b>queue URL</b> , regardless of
-     * whether the queue is empty. If the specified queue does not exist, Amazon
-     * SQS returns a successful response.
+     * Deletes the queue specified by the <code>QueueUrl</code>, regardless of the queue's contents.
+     * </p>
+     * <important>
+     * <p>
+     * Be careful with the <code>DeleteQueue</code> action: When you delete a queue, any messages in the queue are no
+     * longer available.
+     * </p>
+     * </important>
+     * <p>
+     * When you delete a queue, the deletion process takes up to 60 seconds. Requests you send involving that queue
+     * during the 60 seconds might succeed. For example, a <code> <a>SendMessage</a> </code> request might succeed, but
+     * after 60 seconds the queue and the message you sent no longer exist.
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> Use DeleteQueue with care; once you delete your queue,
-     * any messages in the queue are no longer available.
+     * When you delete a queue, you must wait at least 60 seconds before creating a queue with the same name.
      * </p>
+     * <note>
      * <p>
-     * When you delete a queue, the deletion process takes up to 60 seconds.
-     * Requests you send involving that queue during the 60 seconds might
-     * succeed. For example, a SendMessage request might succeed, but after the
-     * 60 seconds, the queue and that message you sent no longer exist. Also,
-     * when you delete a queue, you must wait at least 60 seconds before
-     * creating a queue with the same name.
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
      * </p>
-     * <p>
-     * We reserve the right to delete queues that have had no activity for more
-     * than 30 days. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/SQSConcepts.html"
-     * > How Amazon SQS Queues Work </a> in the <i>Amazon SQS Developer
-     * Guide</i> .
-     * </p>
+     * </note>
      *
      * @param deleteQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            DeleteQueue service method on AmazonSQS.
-     *
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     * @return Result of the DeleteQueue operation returned by the service.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.DeleteQueue
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteQueue" target="_top">AWS API
+     *      Documentation</a>
      */
-    public DeleteQueueResult deleteQueue(DeleteQueueRequest deleteQueueRequest)
+    public DeleteQueueResponse deleteQueue(DeleteQueueRequest deleteQueueRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.deleteQueue(deleteQueueRequest);
@@ -980,30 +731,40 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Returns a list of your queues. The maximum number of queues that can be
-     * returned is 1000. If you specify a value for the optional
-     * <code>QueueNamePrefix</code> parameter, only queues with a name beginning
-     * with the specified value are returned.
+     * Returns a list of your queues in the current region. The response includes a maximum of 1,000 results. If you
+     * specify a value for the optional <code>QueueNamePrefix</code> parameter, only queues with a name that begins with
+     * the specified value are returned.
      * </p>
+     * <p>
+     * The <code>listQueues</code> methods supports pagination. Set parameter <code>MaxResults</code> in the request to
+     * specify the maximum number of results to be returned in the response. If you do not set <code>MaxResults</code>,
+     * the response includes a maximum of 1,000 results. If you set <code>MaxResults</code> and there are additional
+     * results to display, the response includes a value for <code>NextToken</code>. Use <code>NextToken</code> as a
+     * parameter in your next request to <code>listQueues</code> to receive the next page of results.
+     * </p>
+     * <note>
+     * <p>
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
+     * </p>
+     * </note>
      *
      * @param listQueuesRequest
-     *            Container for the necessary parameters to execute the
-     *            ListQueues service method on AmazonSQS.
-     *
-     * @return The response from the ListQueues service method, as returned by
-     *         AmazonSQS.
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     * @return Result of the ListQueues operation returned by the service.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ListQueues
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ListQueues" target="_top">AWS API
+     *      Documentation</a>
      */
-    public ListQueuesResult listQueues(ListQueuesRequest listQueuesRequest) throws AmazonServiceException,
+    public ListQueuesResponse listQueues(ListQueuesRequest listQueuesRequest) throws AmazonServiceException,
             AmazonClientException {
 
         return amazonSqsToBeExtended.listQueues(listQueuesRequest);
@@ -1011,49 +772,49 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Deletes up to ten messages from the specified queue. This is a batch
-     * version of DeleteMessage. The result of the delete action on each message
-     * is reported individually in the response.
+     * Deletes up to ten messages from the specified queue. This is a batch version of
+     * <code> <a>DeleteMessage</a>.</code> The result of the action on each message is reported individually in the
+     * response.
+     * </p>
+     * <important>
+     * <p>
+     * Because the batch request can result in a combination of successful and unsuccessful actions, you should check
+     * for batch errors even when the call returns an HTTP status code of <code>200</code>.
+     * </p>
+     * </important>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
      *
      * @param deleteMessageBatchRequest
-     *            Container for the necessary parameters to execute the
-     *            DeleteMessageBatch service method on AmazonSQS.
-     *
-     * @return The response from the DeleteMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
+     * @return Result of the DeleteMessageBatch operation returned by the service.
      * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
+     *         The batch request contains more entries than permissible.
      * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The batch request doesn't contain any entries.
+     * @throws BatchEntryIdsNotDistinctException
+     *         Two or more batch entries in the request have the same <code>Id</code>.
+     * @throws InvalidBatchEntryIdException
+     *         The <code>Id</code> of a batch entry in a batch request doesn't abide by the specification.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.DeleteMessageBatch
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessageBatch" target="_top">AWS API
+     *      Documentation</a>
      */
-    public DeleteMessageBatchResult deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest)
+    public DeleteMessageBatchResponse deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.deleteMessageBatch(deleteMessageBatchRequest);
@@ -1061,64 +822,101 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Creates a new queue, or returns the URL of an existing one. When you
-     * request <code>CreateQueue</code> , you provide a name for the queue. To
-     * successfully create a new queue, you must provide a name that is unique
-     * within the scope of your own queues.
+     * Creates a new standard or FIFO queue. You can pass one or more attributes in the request. Keep the following in
+     * mind:
+     * </p>
+     * <ul>
+     * <li>
+     * <p>
+     * If you don't specify the <code>FifoQueue</code> attribute, Amazon SQS creates a standard queue.
+     * </p>
+     * <note>
+     * <p>
+     * You can't change the queue type after you create it and you can't convert an existing standard queue into a FIFO
+     * queue. You must either create a new FIFO queue for your application or delete your existing standard queue and
+     * recreate it as a FIFO queue. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html#FIFO-queues-moving"
+     * >Moving From a Standard Queue to a FIFO Queue</a> in the <i>Amazon Simple Queue Service Developer Guide</i>.
+     * </p>
+     * </note></li>
+     * <li>
+     * <p>
+     * If you don't provide a value for an attribute, the queue is created with the default value for the attribute.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * If you delete a queue, you must wait at least 60 seconds before creating a queue with the same name.
+     * </p>
+     * </li>
+     * </ul>
+     * <p>
+     * To successfully create a new queue, you must provide a queue name that adheres to the <a
+     * href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/limits-queues.html">limits
+     * related to queues</a> and is unique within the scope of your queues.
+     * </p>
+     * <note>
+     * <p>
+     * After you create a queue, you must wait at least one second after the queue is created to be able to use the
+     * queue.
+     * </p>
+     * </note>
+     * <p>
+     * To get the queue URL, use the <code> <a>GetQueueUrl</a> </code> action. <code> <a>GetQueueUrl</a> </code>
+     * requires only the <code>QueueName</code> parameter. be aware of existing queue names:
+     * </p>
+     * <ul>
+     * <li>
+     * <p>
+     * If you provide the name of an existing queue along with the exact names and values of all the queue's attributes,
+     * <code>CreateQueue</code> returns the queue URL for the existing queue.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * If the queue name, attribute names, or attribute values don't match an existing queue, <code>CreateQueue</code>
+     * returns an error.
+     * </p>
+     * </li>
+     * </ul>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <b>NOTE:</b> If you delete a queue, you must wait at least 60 seconds
-     * before creating a queue with the same name.
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * You may pass one or more attributes in the request. If you do not provide
-     * a value for any attribute, the queue will have the default value for that
-     * attribute. Permitted attributes are the same that can be set using
-     * SetQueueAttributes.
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
+     * <note>
      * <p>
-     * <b>NOTE:</b> Use GetQueueUrl to get a queue's URL. GetQueueUrl requires
-     * only the QueueName parameter.
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
      * </p>
-     * <p>
-     * If you provide the name of an existing queue, along with the exact names
-     * and values of all the queue's attributes, <code>CreateQueue</code>
-     * returns the queue URL for the existing queue. If the queue name,
-     * attribute names, or attribute values do not match an existing queue,
-     * <code>CreateQueue</code> returns an error.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
+     * </note>
      *
      * @param createQueueRequest
-     *            Container for the necessary parameters to execute the
-     *            CreateQueue service method on AmazonSQS.
-     *
-     * @return The response from the CreateQueue service method, as returned by
-     *         AmazonSQS.
-     *
-     * @throws QueueNameExistsException
+     * @return Result of the CreateQueue operation returned by the service.
      * @throws QueueDeletedRecentlyException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         You must wait 60 seconds after deleting a queue before you can create another queue with the same name.
+     * @throws QueueNameExistsException
+     *         A queue with this name already exists. Amazon SQS returns this error only if the request includes
+     *         attributes whose values differ from those of the existing queue.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.CreateQueue
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/CreateQueue" target="_top">AWS API
+     *      Documentation</a>
      */
-    public CreateQueueResult createQueue(CreateQueueRequest createQueueRequest) throws AmazonServiceException,
+    public CreateQueueResponse createQueue(CreateQueueRequest createQueueRequest) throws AmazonServiceException,
             AmazonClientException {
 
         return amazonSqsToBeExtended.createQueue(createQueueRequest);
@@ -1127,51 +925,77 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
     /**
      * <p>
      * Adds a permission to a queue for a specific <a
-     * href="http://docs.aws.amazon.com/general/latest/gr/glos-chap.html#P">
-     * principal </a> . This allows for sharing access to the queue.
+     * href="https://docs.aws.amazon.com/general/latest/gr/glos-chap.html#P">principal</a>. This allows sharing access
+     * to the queue.
      * </p>
      * <p>
-     * When you create a queue, you have full control access rights for the
-     * queue. Only you (as owner of the queue) can grant or deny permissions to
-     * the queue. For more information about these permissions, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/acp-overview.html"
-     * > Shared Queues </a> in the <i>Amazon SQS Developer Guide</i> .
+     * When you create a queue, you have full control access rights for the queue. Only you, the owner of the queue, can
+     * grant or deny permissions to the queue. For more information about these permissions, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-writing-an-sqs-policy.html#write-messages-to-shared-queue"
+     * >Allow Developers to Write Messages to a Shared Queue</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
+     * </p>
+     * <note>
+     * <ul>
+     * <li>
+     * <p>
+     * <code>AddPermission</code> generates a policy for you. You can use <code> <a>SetQueueAttributes</a> </code> to
+     * upload your policy. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-creating-custom-policies.html"
+     * >Using Custom Policies with the Amazon SQS Access Policy Language</a> in the <i>Amazon Simple Queue Service
+     * Developer Guide</i>.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * An Amazon SQS policy can have a maximum of 7 actions.
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * To remove the ability to change queue permissions, you must deny permission to the <code>AddPermission</code>,
+     * <code>RemovePermission</code>, and <code>SetQueueAttributes</code> actions in your IAM policy.
+     * </p>
+     * </li>
+     * </ul>
+     * </note>
+     * <p>
+     * Some actions take lists of parameters. These lists are specified using the <code>param.n</code> notation. Values
+     * of <code>n</code> are integers starting from 1. For example, a parameter list with two elements looks like this:
      * </p>
      * <p>
-     * <b>NOTE:</b> AddPermission writes an Amazon SQS-generated policy. If you
-     * want to write your own policy, use SetQueueAttributes to upload your
-     * policy. For more information about writing your own policy, see Using The
-     * Access Policy Language in the Amazon SQS Developer Guide.
+     * <code>&amp;AttributeName.1=first</code>
      * </p>
      * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
+     * <code>&amp;AttributeName.2=second</code>
      * </p>
+     * <note>
      * <p>
-     * <code>&Attribute.1=this</code>
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
      * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
+     * </note>
      *
      * @param addPermissionRequest
-     *            Container for the necessary parameters to execute the
-     *            AddPermission service method on AmazonSQS.
-     *
-     *
+     * @return Result of the AddPermission operation returned by the service.
      * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     *         The specified action violates a limit. For example, <code>ReceiveMessage</code> returns this error if the
+     *         maximum number of inflight messages is reached and <code>AddPermission</code> returns this error if the
+     *         maximum number of permissions for the queue is reached.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.AddPermission
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/AddPermission" target="_top">AWS API
+     *      Documentation</a>
      */
-    public AddPermissionResult addPermission(AddPermissionRequest addPermissionRequest)
+    public AddPermissionResponse addPermission(AddPermissionRequest addPermissionRequest)
             throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.addPermission(addPermissionRequest);
@@ -1179,876 +1003,66 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
 
     /**
      * <p>
-     * Returns a list of your queues. The maximum number of queues that can be
-     * returned is 1000. If you specify a value for the optional
-     * <code>QueueNamePrefix</code> parameter, only queues with a name beginning
-     * with the specified value are returned.
+     * Returns a list of your queues in the current region. The response includes a maximum of 1,000 results. If you
+     * specify a value for the optional <code>QueueNamePrefix</code> parameter, only queues with a name that begins with
+     * the specified value are returned.
      * </p>
+     * <p>
+     * The <code>listQueues</code> methods supports pagination. Set parameter <code>MaxResults</code> in the request to
+     * specify the maximum number of results to be returned in the response. If you do not set <code>MaxResults</code>,
+     * the response includes a maximum of 1,000 results. If you set <code>MaxResults</code> and there are additional
+     * results to display, the response includes a value for <code>NextToken</code>. Use <code>NextToken</code> as a
+     * parameter in your next request to <code>listQueues</code> to receive the next page of results.
+     * </p>
+     * <note>
+     * <p>
+     * Cross-account permissions don't apply to this action. For more information, see <a href=
+     * "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-customer-managed-policy-examples.html#grant-cross-account-permissions-to-role-and-user-name"
+     * >Grant Cross-Account Permissions to a Role and a User Name</a> in the <i>Amazon Simple Queue Service Developer
+     * Guide</i>.
+     * </p>
+     * </note>
      *
-     * @return The response from the ListQueues service method, as returned by
-     *         AmazonSQS.
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
+     * @return Result of the ListQueues operation returned by the service.
+     * @throws SdkException
+     *         Base class for all exceptions that can be thrown by the SDK (both service and client). Can be used for
+     *         catch all scenarios.
+     * @throws SdkClientException
+     *         If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws SqsException
+     *         Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
+     * @sample SqsClient.ListQueues
+     * @see #listQueues(ListQueuesRequest)
+     * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ListQueues" target="_top">AWS API
+     *      Documentation</a>
      */
-    public ListQueuesResult listQueues() throws AmazonServiceException, AmazonClientException {
+    public ListQueuesResponse listQueues() throws AmazonServiceException, AmazonClientException {
 
         return amazonSqsToBeExtended.listQueues();
     }
 
-    /**
-     * <p>
-     * Sets the value of one or more queue attributes. When you change a queue's
-     * attributes, the change can take up to 60 seconds for most of the
-     * attributes to propagate throughout the SQS system. Changes made to the
-     * <code>MessageRetentionPeriod</code> attribute can take up to 15 minutes.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param attributes
-     *            A map of attributes to set.
-     *            <p>
-     *            The following lists the names, descriptions, and values of the
-     *            special request parameters the <code>SetQueueAttributes</code>
-     *            action uses:
-     *            <p>
-     *            <ul>
-     *            <li><code>DelaySeconds</code> - The time in seconds that the
-     *            delivery of all messages in the queue will be delayed. An
-     *            integer from 0 to 900 (15 minutes). The default for this
-     *            attribute is 0 (zero).</li>
-     *            <li><code>MaximumMessageSize</code> - The limit of how many
-     *            bytes a message can contain before Amazon SQS rejects it. An
-     *            integer from 1024 bytes (1 KiB) up to 262144 bytes (256 KiB).
-     *            The default for this attribute is 262144 (256 KiB).</li>
-     *            <li><code>MessageRetentionPeriod</code> - The number of
-     *            seconds Amazon SQS retains a message. Integer representing
-     *            seconds, from 60 (1 minute) to 1209600 (14 days). The default
-     *            for this attribute is 345600 (4 days).</li>
-     *            <li><code>Policy</code> - The queue's policy. A valid AWS
-     *            policy. For more information about policy structure, see <a
-     *            href=
-     *            "http://docs.aws.amazon.com/IAM/latest/UserGuide/PoliciesOverview.html"
-     *            >Overview of AWS IAM Policies</a> in the <i>Amazon IAM User
-     *            Guide</i>.</li>
-     *            <li><code>ReceiveMessageWaitTimeSeconds</code> - The time for
-     *            which a ReceiveMessage call will wait for a message to arrive.
-     *            An integer from 0 to 20 (seconds). The default for this
-     *            attribute is 0.</li>
-     *            <li><code>VisibilityTimeout</code> - The visibility timeout
-     *            for the queue. An integer from 0 to 43200 (12 hours). The
-     *            default for this attribute is 30. For more information about
-     *            visibility timeout, see Visibility Timeout in the <i>Amazon
-     *            SQS Developer Guide</i>.</li>
-     *            <li><code>RedrivePolicy</code> - The parameters for dead
-     *            letter queue functionality of the source queue. For more
-     *            information about RedrivePolicy and dead letter queues, see
-     *            Using Amazon SQS Dead Letter Queues in the <i>Amazon SQS
-     *            Developer Guide</i>.</li>
-     *            </ul>
-     *
-     * @return The response from the SetQueueAttributes service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws InvalidAttributeNameException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public SetQueueAttributesResult setQueueAttributes(String queueUrl, Map<String, String> attributes)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.setQueueAttributes(queueUrl, attributes);
-    }
-
-    /**
-     * <p>
-     * Changes the visibility timeout of multiple messages. This is a batch
-     * version of ChangeMessageVisibility. The result of the action on each
-     * message is reported individually in the response. You can send up to 10
-     * ChangeMessageVisibility requests with each
-     * <code>ChangeMessageVisibilityBatch</code> action.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>Because the batch request can result in a combination of
-     * successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param entries
-     *            A list of receipt handles of the messages for which the
-     *            visibility timeout must be changed.
-     *
-     * @return The response from the ChangeMessageVisibilityBatch service
-     *         method, as returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
-     * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
-     * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(String queueUrl,
-                                                                           List<ChangeMessageVisibilityBatchRequestEntry> entries) throws AmazonServiceException,
-            AmazonClientException {
-
-        return amazonSqsToBeExtended.changeMessageVisibilityBatch(queueUrl, entries);
-    }
-
-    /**
-     * <p>
-     * Changes the visibility timeout of a specified message in a queue to a new
-     * value. The maximum allowed timeout value you can set the value to is 12
-     * hours. This means you can't extend the timeout of a message in an
-     * existing queue to more than a total visibility timeout of 12 hours. (For
-     * more information visibility timeout, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .)
-     * </p>
-     * <p>
-     * For example, let's say you have a message and its default message
-     * visibility timeout is 30 minutes. You could call
-     * <code>ChangeMessageVisiblity</code> with a value of two hours and the
-     * effective timeout would be two hours and 30 minutes. When that time comes
-     * near you could again extend the time out by calling
-     * ChangeMessageVisiblity, but this time the maximum allowed timeout would
-     * be 9 hours and 30 minutes.
-     * </p>
-     * <p>
-     * <b>NOTE:</b> There is a 120,000 limit for the number of inflight messages
-     * per queue. Messages are inflight after they have been received from the
-     * queue by a consuming component, but have not yet been deleted from the
-     * queue. If you reach the 120,000 limit, you will receive an OverLimit
-     * error message from Amazon SQS. To help avoid reaching the limit, you
-     * should delete the messages from the queue after they have been processed.
-     * You can also increase the number of queues you use to process the
-     * messages.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>If you attempt to set the VisibilityTimeout to an amount
-     * more than the maximum time left, Amazon SQS returns an error. It will not
-     * automatically recalculate and increase the timeout to the maximum time
-     * remaining.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>Unlike with a queue, when you change the visibility
-     * timeout for a specific message, that timeout value is applied immediately
-     * but is not saved in memory for that message. If you don't delete a
-     * message after it is received, the visibility timeout for the message the
-     * next time it is received reverts to the original timeout value, not the
-     * value you set with the ChangeMessageVisibility action.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param receiptHandle
-     *            The receipt handle associated with the message whose
-     *            visibility timeout should be changed. This parameter is
-     *            returned by the <a>ReceiveMessage</a> action.
-     * @param visibilityTimeout
-     *            The new value (in seconds - from 0 to 43200 - maximum 12
-     *            hours) for the message's visibility timeout.
-     *
-     * @return The response from the ChangeMessageVisibility service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws ReceiptHandleIsInvalidException
-     * @throws MessageNotInflightException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public ChangeMessageVisibilityResult changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.changeMessageVisibility(queueUrl, receiptHandle, visibilityTimeout);
-    }
-
-    /**
-     * <p>
-     * Returns the URL of an existing queue. This action provides a simple way
-     * to retrieve the URL of an Amazon SQS queue.
-     * </p>
-     * <p>
-     * To access a queue that belongs to another AWS account, use the
-     * <code>QueueOwnerAWSAccountId</code> parameter to specify the account ID
-     * of the queue's owner. The queue's owner must grant you permission to
-     * access the queue. For more information about shared queue access, see
-     * AddPermission or go to <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/acp-overview.html"
-     * > Shared Queues </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     *
-     * @param queueName
-     *            The name of the queue whose URL must be fetched. Maximum 80
-     *            characters; alphanumeric characters, hyphens (-), and
-     *            underscores (_) are allowed.
-     *
-     * @return The response from the GetQueueUrl service method, as returned by
-     *         AmazonSQS.
-     *
-     * @throws QueueDoesNotExistException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public GetQueueUrlResult getQueueUrl(String queueName) throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.getQueueUrl(queueName);
-    }
-
-    /**
-     * <p>
-     * Revokes any permissions in the queue policy that matches the specified
-     * <code>Label</code> parameter. Only the owner of the queue can remove
-     * permissions.
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param label
-     *            The identification of the permission to remove. This is the
-     *            label added with the <a>AddPermission</a> action.
-     *
-     * @return The response from the RemovePermission service method, as
-     *         returned by AmazonSQS.
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public RemovePermissionResult removePermission(String queueUrl, String label)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.removePermission(queueUrl, label);
-    }
-
-    /**
-     * <p>
-     * Gets attributes for the specified queue. The following attributes are
-     * supported:
-     * <ul>
-     * <li> <code>All</code> - returns all values.</li>
-     * <li> <code>ApproximateNumberOfMessages</code> - returns the approximate
-     * number of visible messages in a queue. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ApproximateNumber.html"
-     * > Resources Required to Process Messages </a> in the <i>Amazon SQS
-     * Developer Guide</i> .</li>
-     * <li> <code>ApproximateNumberOfMessagesNotVisible</code> - returns the
-     * approximate number of messages that are not timed-out and not deleted.
-     * For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ApproximateNumber.html"
-     * > Resources Required to Process Messages </a> in the <i>Amazon SQS
-     * Developer Guide</i> .</li>
-     * <li> <code>VisibilityTimeout</code> - returns the visibility timeout for
-     * the queue. For more information about visibility timeout, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AboutVT.html"
-     * > Visibility Timeout </a> in the <i>Amazon SQS Developer Guide</i> .</li>
-     * <li> <code>CreatedTimestamp</code> - returns the time when the queue was
-     * created (epoch time in seconds).</li>
-     * <li> <code>LastModifiedTimestamp</code> - returns the time when the queue
-     * was last changed (epoch time in seconds).</li>
-     * <li> <code>Policy</code> - returns the queue's policy.</li>
-     * <li> <code>MaximumMessageSize</code> - returns the limit of how many bytes
-     * a message can contain before Amazon SQS rejects it.</li>
-     * <li> <code>MessageRetentionPeriod</code> - returns the number of seconds
-     * Amazon SQS retains a message.</li>
-     * <li> <code>QueueArn</code> - returns the queue's Amazon resource name
-     * (ARN).</li>
-     * <li> <code>ApproximateNumberOfMessagesDelayed</code> - returns the
-     * approximate number of messages that are pending to be added to the queue.
-     * </li>
-     * <li> <code>DelaySeconds</code> - returns the default delay on the queue in
-     * seconds.</li>
-     * <li> <code>ReceiveMessageWaitTimeSeconds</code> - returns the time for
-     * which a ReceiveMessage call will wait for a message to arrive.</li>
-     * <li> <code>RedrivePolicy</code> - returns the parameters for dead letter
-     * queue functionality of the source queue. For more information about
-     * RedrivePolicy and dead letter queues, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/SQSDeadLetterQueue.html"
-     * > Using Amazon SQS Dead Letter Queues </a> in the <i>Amazon SQS Developer
-     * Guide</i> .</li>
-     *
-     * </ul>
-     *
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Going forward, new attributes might be added. If you are
-     * writing code that calls this action, we recommend that you structure your
-     * code so that it can handle new attributes gracefully.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param attributeNames
-     *            A list of attributes to retrieve information for.
-     *
-     * @return The response from the GetQueueAttributes service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws InvalidAttributeNameException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public GetQueueAttributesResult getQueueAttributes(String queueUrl, List<String> attributeNames)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.getQueueAttributes(queueUrl, attributeNames);
-    }
-
-    /**
-     * <p>
-     * Delivers up to ten messages to the specified queue. This is a batch
-     * version of SendMessage. The result of the send action on each message is
-     * reported individually in the response. The maximum allowed individual
-     * message size is 256 KB (262,144 bytes).
-     * </p>
-     * <p>
-     * The maximum total payload size (i.e., the sum of all a batch's individual
-     * message lengths) is also 256 KB (262,144 bytes).
-     * </p>
-     * <p>
-     * If the <code>DelaySeconds</code> parameter is not specified for an entry,
-     * the default for the queue is used.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b>The following list shows the characters (in Unicode)
-     * that are allowed in your message, according to the W3C XML specification.
-     * For more information, go to http://www.faqs.org/rfcs/rfc1321.html. If you
-     * send any characters that are not included in the list, your request will
-     * be rejected. #x9 | #xA | #xD | [#x20 to #xD7FF] | [#xE000 to #xFFFD] |
-     * [#x10000 to #x10FFFF]
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param entries
-     *            A list of <a>SendMessageBatchRequestEntry</a> items.
-     *
-     * @return The response from the SendMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
-     * @throws TooManyEntriesInBatchRequestException
-     * @throws BatchRequestTooLongException
-     * @throws UnsupportedOperationException
-     * @throws InvalidBatchEntryIdException
-     * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public SendMessageBatchResult sendMessageBatch(String queueUrl, List<SendMessageBatchRequestEntry> entries)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.sendMessageBatch(queueUrl, entries);
-    }
-
-    /**
-     * <p>
-     * Deletes the queue specified by the <b>queue URL</b> , regardless of
-     * whether the queue is empty. If the specified queue does not exist, Amazon
-     * SQS returns a successful response.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Use DeleteQueue with care; once you delete your queue,
-     * any messages in the queue are no longer available.
-     * </p>
-     * <p>
-     * When you delete a queue, the deletion process takes up to 60 seconds.
-     * Requests you send involving that queue during the 60 seconds might
-     * succeed. For example, a SendMessage request might succeed, but after the
-     * 60 seconds, the queue and that message you sent no longer exist. Also,
-     * when you delete a queue, you must wait at least 60 seconds before
-     * creating a queue with the same name.
-     * </p>
-     * <p>
-     * We reserve the right to delete queues that have had no activity for more
-     * than 30 days. For more information, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/SQSConcepts.html"
-     * > How Amazon SQS Queues Work </a> in the <i>Amazon SQS Developer
-     * Guide</i> .
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     *
-     * @return The response from the DeleteQueue service method, as returned by
-     *         AmazonSQS.
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public DeleteQueueResult deleteQueue(String queueUrl) throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.deleteQueue(queueUrl);
-    }
-
-    /**
-     * <p>
-     * Returns a list of your queues. The maximum number of queues that can be
-     * returned is 1000. If you specify a value for the optional
-     * <code>QueueNamePrefix</code> parameter, only queues with a name beginning
-     * with the specified value are returned.
-     * </p>
-     *
-     * @param queueNamePrefix
-     *            A string to use for filtering the list results. Only those
-     *            queues whose name begins with the specified string are
-     *            returned.
-     *
-     * @return The response from the ListQueues service method, as returned by
-     *         AmazonSQS.
-     *
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public ListQueuesResult listQueues(String queueNamePrefix) throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.listQueues(queueNamePrefix);
-    }
-
-    /**
-     * <p>
-     * Deletes up to ten messages from the specified queue. This is a batch
-     * version of DeleteMessage. The result of the delete action on each message
-     * is reported individually in the response.
-     * </p>
-     * <p>
-     * <b>IMPORTANT:</b> Because the batch request can result in a combination
-     * of successful and unsuccessful actions, you should check for batch errors
-     * even when the call returns an HTTP status code of 200.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param entries
-     *            A list of receipt handles for the messages to be deleted.
-     *
-     * @return The response from the DeleteMessageBatch service method, as
-     *         returned by AmazonSQS.
-     *
-     * @throws BatchEntryIdsNotDistinctException
-     * @throws TooManyEntriesInBatchRequestException
-     * @throws InvalidBatchEntryIdException
-     * @throws EmptyBatchRequestException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public DeleteMessageBatchResult deleteMessageBatch(String queueUrl, List<DeleteMessageBatchRequestEntry> entries)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.deleteMessageBatch(queueUrl, entries);
-    }
-
-    /**
-     * <p>
-     * Creates a new queue, or returns the URL of an existing one. When you
-     * request <code>CreateQueue</code> , you provide a name for the queue. To
-     * successfully create a new queue, you must provide a name that is unique
-     * within the scope of your own queues.
-     * </p>
-     * <p>
-     * <b>NOTE:</b> If you delete a queue, you must wait at least 60 seconds
-     * before creating a queue with the same name.
-     * </p>
-     * <p>
-     * You may pass one or more attributes in the request. If you do not provide
-     * a value for any attribute, the queue will have the default value for that
-     * attribute. Permitted attributes are the same that can be set using
-     * SetQueueAttributes.
-     * </p>
-     * <p>
-     * <b>NOTE:</b> Use GetQueueUrl to get a queue's URL. GetQueueUrl requires
-     * only the QueueName parameter.
-     * </p>
-     * <p>
-     * If you provide the name of an existing queue, along with the exact names
-     * and values of all the queue's attributes, <code>CreateQueue</code>
-     * returns the queue URL for the existing queue. If the queue name,
-     * attribute names, or attribute values do not match an existing queue,
-     * <code>CreateQueue</code> returns an error.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueName
-     *            The name for the queue to be created.
-     *
-     * @return The response from the CreateQueue service method, as returned by
-     *         AmazonSQS.
-     *
-     * @throws QueueNameExistsException
-     * @throws QueueDeletedRecentlyException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public CreateQueueResult createQueue(String queueName) throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.createQueue(queueName);
-    }
-
-    /**
-     * <p>
-     * Adds a permission to a queue for a specific <a
-     * href="http://docs.aws.amazon.com/general/latest/gr/glos-chap.html#P">
-     * principal </a> . This allows for sharing access to the queue.
-     * </p>
-     * <p>
-     * When you create a queue, you have full control access rights for the
-     * queue. Only you (as owner of the queue) can grant or deny permissions to
-     * the queue. For more information about these permissions, see <a href=
-     * "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/acp-overview.html"
-     * > Shared Queues </a> in the <i>Amazon SQS Developer Guide</i> .
-     * </p>
-     * <p>
-     * <b>NOTE:</b> AddPermission writes an Amazon SQS-generated policy. If you
-     * want to write your own policy, use SetQueueAttributes to upload your
-     * policy. For more information about writing your own policy, see Using The
-     * Access Policy Language in the Amazon SQS Developer Guide.
-     * </p>
-     * <p>
-     * <b>NOTE:</b>Some API actions take lists of parameters. These lists are
-     * specified using the param.n notation. Values of n are integers starting
-     * from 1. For example, a parameter list with two elements looks like this:
-     * </p>
-     * <p>
-     * <code>&Attribute.1=this</code>
-     * </p>
-     * <p>
-     * <code>&Attribute.2=that</code>
-     * </p>
-     *
-     * @param queueUrl
-     *            The URL of the Amazon SQS queue to take action on.
-     * @param label
-     *            The unique identification of the permission you're setting
-     *            (e.g., <code>AliceSendMessage</code>). Constraints: Maximum 80
-     *            characters; alphanumeric characters, hyphens (-), and
-     *            underscores (_) are allowed.
-     * @param aWSAccountIds
-     *            The AWS account number of the <a
-     *            href="http://docs.aws.amazon.com/general/latest/gr/glos-chap.html#P"
-     *            >principal</a> who will be given permission. The principal
-     *            must have an AWS account, but does not need to be signed up
-     *            for Amazon SQS. For information about locating the AWS account
-     *            identification, see <a href=
-     *            "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/AWSCredentials.html"
-     *            >Your AWS Identifiers</a> in the <i>Amazon SQS Developer
-     *            Guide</i>.
-     * @param actions
-     *            The action the client wants to allow for the specified
-     *            principal. The following are valid values:
-     *            <code>* | SendMessage |
-     * ReceiveMessage | DeleteMessage | ChangeMessageVisibility |
-     * GetQueueAttributes | GetQueueUrl</code>. For more information about these
-     *            actions, see <a href=
-     *            "http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/acp-overview.html#PermissionTypes"
-     *            >Understanding Permissions</a> in the <i>Amazon SQS Developer
-     *            Guide</i>.
-     *            <p>
-     *            Specifying <code>SendMessage</code>,
-     *            <code>DeleteMessage</code>, or
-     *            <code>ChangeMessageVisibility</code> for the
-     *            <code>ActionName.n</code> also grants permissions for the
-     *            corresponding batch versions of those actions:
-     *            <code>SendMessageBatch</code>, <code>DeleteMessageBatch</code>
-     *            , and <code>ChangeMessageVisibilityBatch</code>.
-     *
-     * @return The response from the AddPermission service method, as returned
-     *         by AmazonSQS.
-     *
-     * @throws OverLimitException
-     *
-     * @throws AmazonClientException
-     *             If any internal errors are encountered inside the client
-     *             while attempting to make the request or handle the response.
-     *             For example if a network connection is not available.
-     * @throws AmazonServiceException
-     *             If an error response is returned by AmazonSQS indicating
-     *             either a problem with the data in the request, or a server
-     *             side issue.
-     */
-    public AddPermissionResult addPermission(String queueUrl, String label, List<String> aWSAccountIds, List<String> actions)
-            throws AmazonServiceException, AmazonClientException {
-
-        return amazonSqsToBeExtended.addPermission(queueUrl, label, aWSAccountIds, actions);
-    }
-
-    /**
-     * Returns additional metadata for a previously executed successful,
-     * request, typically used for debugging issues where a service isn't acting
-     * as expected. This data isn't considered part of the result data returned
-     * by an operation, so it's available through this separate, diagnostic
-     * interface.
-     * <p>
-     * Response metadata is only cached for a limited period of time, so if you
-     * need to access this extra diagnostic information for an executed request,
-     * you should use this method to retrieve it as soon as possible after
-     * executing the request.
-     *
-     * @param request
-     *            The originally executed request
-     *
-     * @return The response metadata for the specified request, or null if none
-     *         is available.
-     */
-    public ResponseMetadata getCachedResponseMetadata(AmazonWebServiceRequest request) {
-
-        return amazonSqsToBeExtended.getCachedResponseMetadata(request);
-    }
-
-    /**
-     * Overrides the default endpoint for this client ("sqs.us-east-1.amazonaws.com").
-     * Callers can use this method to control which AWS region they want to work with.
-     * <p>
-     * Callers can pass in just the endpoint (ex: "sqs.us-east-1.amazonaws.com") or a full
-     * URL, including the protocol (ex: "sqs.us-east-1.amazonaws.com"). If the
-     * protocol is not specified here, the default protocol from this client's
-     * {@link ClientConfiguration} will be used, which by default is HTTPS.
-     * <p>
-     * For more information on using AWS regions with the AWS SDK for Java, and
-     * a complete list of all available endpoints for all AWS services, see:
-     * <a href="http://developer.amazonwebservices.com/connect/entry.jspa?externalID=3912">
-     * http://developer.amazonwebservices.com/connect/entry.jspa?externalID=3912</a>
-     * <p>
-     * <b>This method is not threadsafe. An endpoint should be configured when the
-     * client is created and before any service requests are made. Changing it
-     * afterwards creates inevitable race conditions for any service requests in
-     * transit or retrying.</b>
-     *
-     * @param endpoint
-     *            The endpoint (ex: "sqs.us-east-1.amazonaws.com") or a full URL,
-     *            including the protocol (ex: "sqs.us-east-1.amazonaws.com") of
-     *            the region specific AWS endpoint this client will communicate
-     *            with.
-     *
-     * @throws IllegalArgumentException
-     *             If any problems are detected with the specified endpoint.
-     */
-    public void setEndpoint(String endpoint) throws IllegalArgumentException {
-
-        amazonSqsToBeExtended.setEndpoint(endpoint);
-
-    }
-
-    /**
-     * An alternative to {@link AmazonSQS#setEndpoint(String)}, sets the
-     * regional endpoint for this client's service calls. Callers can use this
-     * method to control which AWS region they want to work with.
-     * <p>
-     * By default, all service endpoints in all regions use the https protocol.
-     * To use http instead, specify it in the {@link ClientConfiguration}
-     * supplied at construction.
-     * <p>
-     * <b>This method is not threadsafe. A region should be configured when the
-     * client is created and before any service requests are made. Changing it
-     * afterwards creates inevitable race conditions for any service requests in
-     * transit or retrying.</b>
-     *
-     * @param region
-     *            The region this client will communicate with. See
-     *            {@link Region#getRegion(com.amazonaws.regions.Regions)} for
-     *            accessing a given region.
-     * @throws java.lang.IllegalArgumentException
-     *             If the given region is null, or if this service isn't
-     *             available in the given region. See
-     *             {@link Region#isServiceSupported(String)}
-     * @see Region#getRegion(com.amazonaws.regions.Regions)
-     * @see Region#createClient(Class, AWSCredentialsProvider, ClientConfiguration)
-     */
-    public void setRegion(Region region) throws IllegalArgumentException {
-
-        amazonSqsToBeExtended.setRegion(region);
-
-    }
-
-    /**
-     * Shuts down this client object, releasing any resources that might be held
-     * open. This is an optional method, and callers are not expected to call
-     * it, but can if they want to explicitly release any open resources. Once a
-     * client has been shutdown, it should not be used to make any more
-     * requests.
-     */
-    public void shutdown() {
-
-        amazonSqsToBeExtended.shutdown();
-    }
-
     /** {@inheritDoc} */
-    @Override public ListQueueTagsResult listQueueTags(final ListQueueTagsRequest listQueueTagsRequest) {
+    @Override public ListQueueTagsResponse listQueueTags(final ListQueueTagsRequest listQueueTagsRequest) {
         return amazonSqsToBeExtended.listQueueTags(listQueueTagsRequest);
     }
 
     /** {@inheritDoc} */
-    @Override public ListQueueTagsResult listQueueTags(final String queueUrl) {
-        return amazonSqsToBeExtended.listQueueTags(queueUrl);
-    }
-
-    /** {@inheritDoc} */
-    @Override public TagQueueResult tagQueue(final TagQueueRequest tagQueueRequest) {
+    @Override public TagQueueResponse tagQueue(final TagQueueRequest tagQueueRequest) {
         return amazonSqsToBeExtended.tagQueue(tagQueueRequest);
     }
 
     /** {@inheritDoc} */
-    @Override public TagQueueResult tagQueue(final String queueUrl, final Map<String, String> tags) {
-        return amazonSqsToBeExtended.tagQueue(queueUrl, tags);
-    }
-
-    /** {@inheritDoc} */
-    @Override public UntagQueueResult untagQueue(final UntagQueueRequest untagQueueRequest) {
+    @Override public UntagQueueResponse untagQueue(final UntagQueueRequest untagQueueRequest) {
         return amazonSqsToBeExtended.untagQueue(untagQueueRequest);
     }
 
-    /** {@inheritDoc} */
-    @Override public UntagQueueResult untagQueue(final String queueUrl, final List<String> tagKeys) {
-        return amazonSqsToBeExtended.untagQueue(queueUrl, tagKeys);
+    @Override
+    public String serviceName() {
+        return amazonSqsToBeExtended.serviceName();
     }
 
+    @Override
+    public void close() {
+        amazonSqsToBeExtended.close();
+    }
 }
