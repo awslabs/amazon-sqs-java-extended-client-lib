@@ -16,21 +16,62 @@
 package com.amazon.sqs.javamessaging;
 
 import java.lang.UnsupportedOperationException;
-import java.util.*;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.util.StringUtils;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.core.exception.*;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.*;
-import software.amazon.payloadoffloading.*;
+
+import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
+import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchResponse;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
+import software.amazon.awssdk.services.sqs.model.EmptyBatchRequestException;
+import software.amazon.awssdk.services.sqs.model.InvalidBatchEntryIdException;
+import software.amazon.awssdk.services.sqs.model.InvalidIdFormatException;
+import software.amazon.awssdk.services.sqs.model.InvalidMessageContentsException;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
+import software.amazon.awssdk.services.sqs.model.MessageNotInflightException;
+import software.amazon.awssdk.services.sqs.model.OverLimitException;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueInProgressException;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueRequest;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueResponse;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.ReceiptHandleIsInvalidException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SqsException;
+import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
+import software.amazon.awssdk.utils.StringUtils;
+import software.amazon.payloadoffloading.PayloadS3Pointer;
+import software.amazon.payloadoffloading.PayloadStore;
+import software.amazon.payloadoffloading.S3BackedPayloadStore;
+import software.amazon.payloadoffloading.S3Dao;
+import software.amazon.payloadoffloading.Util;
 
 
 /**
@@ -97,9 +138,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     public AmazonSQSExtendedClient(SqsClient sqsClient, ExtendedClientConfiguration extendedClientConfig) {
         super(sqsClient);
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
-        S3Dao s3Dao = new S3Dao(clientConfiguration.getAmazonS3Client(),
-                clientConfiguration.getSSEAwsKeyManagementParams(),
-                clientConfiguration.getCannedAccessControlList());
+        S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(),
+                clientConfiguration.getServerSideEncryptionStrategy(),
+                clientConfiguration.getObjectCannedACL());
         this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
     }
 
@@ -143,7 +184,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (sendMessageRequest == null) {
             String errorMessage = "sendMessageRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
@@ -157,10 +198,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             return super.sendMessage(sendMessageRequest);
         }
 
-        if (StringUtils.isNullOrEmpty(sendMessageRequest.messageBody())) {
+        if (StringUtils.isEmpty(sendMessageRequest.messageBody())) {
             String errorMessage = "messageBody cannot be null or empty.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         //Check message attributes for ExtendedClient related constraints
@@ -269,7 +310,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (receiveMessageRequest == null) {
             String errorMessage = "receiveMessageRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
@@ -371,7 +412,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (deleteMessageRequest == null) {
             String errorMessage = "deleteMessageRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         DeleteMessageRequest.Builder deleteMessageRequestBuilder = deleteMessageRequest.toBuilder();
@@ -488,7 +529,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *      API Documentation</a>
      */
     public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         ChangeMessageVisibilityRequest.Builder changeMessageVisibilityRequestBuilder = changeMessageVisibilityRequest.toBuilder();
         if (isS3ReceiptHandle(changeMessageVisibilityRequest.receiptHandle())) {
@@ -570,7 +611,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (sendMessageBatchRequest == null) {
             String errorMessage = "sendMessageBatchRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequest.toBuilder();
@@ -648,7 +689,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (deleteMessageBatchRequest == null) {
             String errorMessage = "deleteMessageBatchRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         DeleteMessageBatchRequest.Builder deleteMessageBatchRequestBuilder = deleteMessageBatchRequest.toBuilder();
@@ -731,8 +772,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *      target="_top">AWS API Documentation</a>
      */
     public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(
-            ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException,
-            AmazonClientException {
+            ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AwsServiceException,
+            SdkClientException {
 
         List<ChangeMessageVisibilityBatchRequestEntry> entries = new ArrayList<>(changeMessageVisibilityBatchRequest.entries().size());
         for (ChangeMessageVisibilityBatchRequestEntry entry : changeMessageVisibilityBatchRequest.entries()) {
@@ -788,13 +829,13 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      *      Documentation</a>
      */
     public PurgeQueueResponse purgeQueue(PurgeQueueRequest purgeQueueRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
         LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
 
         if (purgeQueueRequest == null) {
             String errorMessage = "purgeQueueRequest cannot be null.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         PurgeQueueRequest.Builder purgeQueueRequestBuilder = purgeQueueRequest.toBuilder();
@@ -813,7 +854,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                     + " bytes which is larger than the threshold of " + clientConfiguration.getPayloadSizeThreshold()
                     + " Bytes. Consider including the payload in the message body instead of message attributes.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
 
         int messageAttributesNum = messageAttributes.size();
@@ -822,7 +863,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                     + "] exceeds the maximum allowed for large-payload messages ["
                     + SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES + "].";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
         Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(messageAttributes);
 
@@ -830,7 +871,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             String errorMessage = "Message attribute name " + largePayloadAttributeName.get()
                     + " is reserved for use by SQS extended client.";
             LOG.error(errorMessage);
-            throw new AmazonClientException(errorMessage);
+            throw SdkClientException.create(errorMessage);
         }
     }
 
@@ -934,8 +975,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             updateMessageAttributePayloadSize(batchEntry.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
-                messageContentSize);
+        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
         batchEntryBuilder.messageBody(largeMessagePointer);
 
         return batchEntryBuilder.build();
@@ -954,8 +994,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
-                messageContentSize);
+        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
         sendMessageRequestBuilder.messageBody(largeMessagePointer);
 
         return sendMessageRequestBuilder.build();

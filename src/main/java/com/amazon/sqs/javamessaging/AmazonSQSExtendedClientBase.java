@@ -17,12 +17,66 @@ package com.amazon.sqs.javamessaging;
 
 import java.lang.UnsupportedOperationException;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-
-import software.amazon.awssdk.core.exception.*;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.*;
+import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
+import software.amazon.awssdk.services.sqs.model.AddPermissionResponse;
+import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
+import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchResponse;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityResponse;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.CreateQueueResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueResponse;
+import software.amazon.awssdk.services.sqs.model.EmptyBatchRequestException;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
+import software.amazon.awssdk.services.sqs.model.InvalidAttributeNameException;
+import software.amazon.awssdk.services.sqs.model.InvalidBatchEntryIdException;
+import software.amazon.awssdk.services.sqs.model.InvalidIdFormatException;
+import software.amazon.awssdk.services.sqs.model.InvalidMessageContentsException;
+import software.amazon.awssdk.services.sqs.model.ListDeadLetterSourceQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.ListDeadLetterSourceQueuesResponse;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsResponse;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesResponse;
+import software.amazon.awssdk.services.sqs.model.MessageNotInflightException;
+import software.amazon.awssdk.services.sqs.model.OverLimitException;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueInProgressException;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueRequest;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueResponse;
+import software.amazon.awssdk.services.sqs.model.QueueDeletedRecentlyException;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.QueueNameExistsException;
+import software.amazon.awssdk.services.sqs.model.ReceiptHandleIsInvalidException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
+import software.amazon.awssdk.services.sqs.model.RemovePermissionRequest;
+import software.amazon.awssdk.services.sqs.model.RemovePermissionResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.SqsException;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
+import software.amazon.awssdk.services.sqs.model.TagQueueResponse;
+import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
+import software.amazon.awssdk.services.sqs.model.UntagQueueRequest;
+import software.amazon.awssdk.services.sqs.model.UntagQueueResponse;
 
 abstract class AmazonSQSExtendedClientBase implements SqsClient {
     SqsClient amazonSqsToBeExtended;
@@ -66,7 +120,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessage" target="_top">AWS API
      *      Documentation</a>
      */
-    public SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) {
+    public SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) throws
+            InvalidMessageContentsException, UnsupportedOperationException, SdkException, SdkClientException, SqsException {
         return amazonSqsToBeExtended.sendMessage(sendMessageRequest);
     }
 
@@ -208,7 +263,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessage" target="_top">AWS API
      *      Documentation</a>
      */
-    public DeleteMessageResponse deleteMessage(DeleteMessageRequest deleteMessageRequest) {
+    public DeleteMessageResponse deleteMessage(DeleteMessageRequest deleteMessageRequest) throws
+            InvalidIdFormatException, ReceiptHandleIsInvalidException, SdkException, SdkClientException, SqsException {
         return amazonSqsToBeExtended.deleteMessage(deleteMessageRequest);
     }
 
@@ -259,7 +315,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public SetQueueAttributesResponse setQueueAttributes(SetQueueAttributesRequest setQueueAttributesRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws InvalidAttributeNameException, AwsServiceException, SdkClientException, SqsException {
 
         return amazonSqsToBeExtended.setQueueAttributes(setQueueAttributesRequest);
     }
@@ -310,8 +366,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      target="_top">AWS API Documentation</a>
      */
     public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(
-            ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AmazonServiceException,
-            AmazonClientException {
+            ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AwsServiceException,
+            SdkClientException {
 
         return amazonSqsToBeExtended.changeMessageVisibilityBatch(changeMessageVisibilityBatchRequest);
     }
@@ -403,7 +459,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      API Documentation</a>
      */
     public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.changeMessageVisibility(changeMessageVisibilityRequest);
     }
@@ -436,8 +492,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/GetQueueUrl" target="_top">AWS API
      *      Documentation</a>
      */
-    public GetQueueUrlResponse getQueueUrl(GetQueueUrlRequest getQueueUrlRequest) throws AmazonServiceException,
-            AmazonClientException {
+    public GetQueueUrlResponse getQueueUrl(GetQueueUrlRequest getQueueUrlRequest) throws AwsServiceException,
+            SdkClientException {
 
         return amazonSqsToBeExtended.getQueueUrl(getQueueUrlRequest);
     }
@@ -484,7 +540,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public RemovePermissionResponse removePermission(RemovePermissionRequest removePermissionRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.removePermission(removePermissionRequest);
     }
@@ -517,7 +573,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public GetQueueAttributesResponse getQueueAttributes(GetQueueAttributesRequest getQueueAttributesRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.getQueueAttributes(getQueueAttributesRequest);
     }
@@ -590,7 +646,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public SendMessageBatchResponse sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.sendMessageBatch(sendMessageBatchRequest);
     }
@@ -636,7 +692,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public PurgeQueueResponse purgeQueue(PurgeQueueRequest purgeQueueRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.purgeQueue(purgeQueueRequest);
 
@@ -677,8 +733,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      API Documentation</a>
      */
     public ListDeadLetterSourceQueuesResponse listDeadLetterSourceQueues(
-            ListDeadLetterSourceQueuesRequest listDeadLetterSourceQueuesRequest) throws AmazonServiceException,
-            AmazonClientException {
+            ListDeadLetterSourceQueuesRequest listDeadLetterSourceQueuesRequest) throws AwsServiceException,
+            SdkClientException {
 
         return amazonSqsToBeExtended.listDeadLetterSourceQueues(listDeadLetterSourceQueuesRequest);
     }
@@ -724,7 +780,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public DeleteQueueResponse deleteQueue(DeleteQueueRequest deleteQueueRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.deleteQueue(deleteQueueRequest);
     }
@@ -764,8 +820,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ListQueues" target="_top">AWS API
      *      Documentation</a>
      */
-    public ListQueuesResponse listQueues(ListQueuesRequest listQueuesRequest) throws AmazonServiceException,
-            AmazonClientException {
+    public ListQueuesResponse listQueues(ListQueuesRequest listQueuesRequest) throws AwsServiceException,
+            SdkClientException {
 
         return amazonSqsToBeExtended.listQueues(listQueuesRequest);
     }
@@ -815,7 +871,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public DeleteMessageBatchResponse deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.deleteMessageBatch(deleteMessageBatchRequest);
     }
@@ -916,8 +972,8 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/CreateQueue" target="_top">AWS API
      *      Documentation</a>
      */
-    public CreateQueueResponse createQueue(CreateQueueRequest createQueueRequest) throws AmazonServiceException,
-            AmazonClientException {
+    public CreateQueueResponse createQueue(CreateQueueRequest createQueueRequest)
+            throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.createQueue(createQueueRequest);
     }
@@ -996,7 +1052,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      *      Documentation</a>
      */
     public AddPermissionResponse addPermission(AddPermissionRequest addPermissionRequest)
-            throws AmazonServiceException, AmazonClientException {
+            throws AwsServiceException, SdkClientException, OverLimitException {
 
         return amazonSqsToBeExtended.addPermission(addPermissionRequest);
     }
@@ -1036,7 +1092,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ListQueues" target="_top">AWS API
      *      Documentation</a>
      */
-    public ListQueuesResponse listQueues() throws AmazonServiceException, AmazonClientException {
+    public ListQueuesResponse listQueues() throws AwsServiceException, SdkClientException {
 
         return amazonSqsToBeExtended.listQueues();
     }

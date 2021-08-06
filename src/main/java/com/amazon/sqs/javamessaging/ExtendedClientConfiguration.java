@@ -15,11 +15,11 @@
 
 package com.amazon.sqs.javamessaging;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
-import com.amazonaws.annotation.NotThreadSafe;
+import software.amazon.awssdk.annotations.NotThreadSafe;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.payloadoffloading.PayloadStorageConfiguration;
+import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
 
 
 /**
@@ -59,7 +59,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      *            objects its the responsibility to the message producer to handle
      *            the clean up appropriately.
      */
-    public void setPayloadSupportEnabled(AmazonS3 s3, String s3BucketName, boolean cleanupS3Payload) {
+    public void setPayloadSupportEnabled(S3Client s3, String s3BucketName, boolean cleanupS3Payload) {
         setPayloadSupportEnabled(s3, s3BucketName);
         this.cleanupS3Payload = cleanupS3Payload;
     }
@@ -80,7 +80,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      *            objects its the responsibility to the message producer to handle
      *            the clean up appropriately.
      */
-    public ExtendedClientConfiguration withPayloadSupportEnabled(AmazonS3 s3, String s3BucketName, boolean cleanupS3Payload) {
+    public ExtendedClientConfiguration withPayloadSupportEnabled(S3Client s3, String s3BucketName, boolean cleanupS3Payload) {
         setPayloadSupportEnabled(s3, s3BucketName, cleanupS3Payload);
         return this;
     }
@@ -128,14 +128,14 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     }
 
     @Override
-    public ExtendedClientConfiguration withPayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+    public ExtendedClientConfiguration withPayloadSupportEnabled(S3Client s3, String s3BucketName) {
         this.setPayloadSupportEnabled(s3, s3BucketName);
         return this;
     }
 
     @Override
-    public ExtendedClientConfiguration withSSEAwsKeyManagementParams(SSEAwsKeyManagementParams sseAwsKeyManagementParams) {
-        this.setSSEAwsKeyManagementParams(sseAwsKeyManagementParams);
+    public ExtendedClientConfiguration withObjectCannedACL(ObjectCannedACL objectCannedACL) {
+        this.setObjectCannedACL(objectCannedACL);
         return this;
     }
 
@@ -152,8 +152,8 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     }
 
     @Override
-    public ExtendedClientConfiguration withCannedAccessControlList(CannedAccessControlList cannedAccessControlList) {
-        this.setCannedAccessControlList(cannedAccessControlList);
+    public ExtendedClientConfiguration withServerSideEncryption(ServerSideEncryptionStrategy serverSideEncryption) {
+        this.setServerSideEncryptionStrategy(serverSideEncryption);
         return this;
     }
 
@@ -168,10 +168,10 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      *            large-payload messages. The bucket must be already created and
      *            configured in s3.
      *
-     * @deprecated Instead use {@link #setPayloadSupportEnabled(AmazonS3, String, boolean)}
+     * @deprecated Instead use {@link #setPayloadSupportEnabled(S3Client, String, boolean)}
      */
     @Deprecated
-    public void setLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+    public void setLargePayloadSupportEnabled(S3Client s3, String s3BucketName) {
         this.setPayloadSupportEnabled(s3, s3BucketName);
     }
 
@@ -187,10 +187,10 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      *            configured in s3.
      * @return the updated ExtendedClientConfiguration object.
      *
-     * @deprecated Instead use {@link #withPayloadSupportEnabled(AmazonS3, String)}
+     * @deprecated Instead use {@link #withPayloadSupportEnabled(S3Client, String)}
      */
     @Deprecated
-    public ExtendedClientConfiguration withLargePayloadSupportEnabled(AmazonS3 s3, String s3BucketName) {
+    public ExtendedClientConfiguration withLargePayloadSupportEnabled(S3Client s3, String s3BucketName) {
         setLargePayloadSupportEnabled(s3, s3BucketName);
         return this;
     }
