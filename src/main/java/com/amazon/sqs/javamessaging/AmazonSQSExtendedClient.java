@@ -349,6 +349,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         ReceiveMessageResult receiveMessageResult = super.receiveMessage(receiveMessageRequest);
 
         List<Message> messages = receiveMessageResult.getMessages();
+        List<Message> messagesToIgnore = new ArrayList<>();
         for (Message message : messages) {
 
             // for each received message check if they are stored in S3.
@@ -357,7 +358,22 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 String largeMessagePointer = message.getBody();
                 largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
 
-                message.setBody(payloadStore.getOriginalPayload(largeMessagePointer));
+                final String originalBody;
+                try {
+                    originalBody = payloadStore.getOriginalPayload(largeMessagePointer);
+                } catch (AmazonServiceException e) {
+                    boolean isNoSuchKeyException = ((AmazonServiceException) e.getCause()).getErrorCode().equals("NoSuchKey");
+                    if (isNoSuchKeyException && clientConfiguration.ignoresPayloadNotFound()) {
+                        deleteMessage(receiveMessageRequest.getQueueUrl(), message.getReceiptHandle());
+                        LOG.warn("SQS message deleted as it could not be found in S3");
+                        messagesToIgnore.add(message);
+                        continue;
+                    }
+                    throw e;
+                }
+
+                // Replace the large message pointer with the original message body
+                message.setBody(originalBody);
 
                 // remove the additional attribute before returning the message
                 // to user.
@@ -371,6 +387,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 message.setReceiptHandle(modifiedReceiptHandle);
             }
         }
+        receiveMessageResult.getMessages().removeAll(messagesToIgnore);
         return receiveMessageResult;
     }
 
