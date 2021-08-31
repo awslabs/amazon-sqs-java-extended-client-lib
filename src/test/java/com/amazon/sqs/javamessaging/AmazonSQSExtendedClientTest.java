@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -33,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.when;
@@ -405,6 +407,55 @@ public class AmazonSQSExtendedClientTest {
         Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().getMessageAttributes();
         Assert.assertEquals("Number", attributes.get(AmazonSQSExtendedClient.LEGACY_RESERVED_ATTRIBUTE_NAME).getDataType());
         Assert.assertEquals(messageLength, (int) Integer.valueOf(attributes.get(AmazonSQSExtendedClient.LEGACY_RESERVED_ATTRIBUTE_NAME).getStringValue()));
+    }
+
+    @Test
+    public void testWhenIgnorePayloadNotFoundIsSentThenNotFoundKeysInS3AreDeletedInSQS() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withIgnorePayloadNotFound(true);
+
+        AmazonServiceException mockException = mock(AmazonServiceException.class);
+        when(mockException.getErrorCode()).thenReturn("NoSuchKey");
+
+        Message message = new Message().addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, mock(MessageAttributeValue.class));
+        String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson();
+        message.setBody(pointer);
+        message.setReceiptHandle("receipt-handle");
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(new ReceiveMessageResult().withMessages(message));
+        doThrow(mockException).when(mockS3).getObject(any(GetObjectRequest.class));
+
+        AmazonSQS sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+        ReceiveMessageRequest messageRequest = new ReceiveMessageRequest().withQueueUrl(SQS_QUEUE_URL);
+        ReceiveMessageResult actualReceiveMessageResult = sqsExtended.receiveMessage(messageRequest);
+        Assert.assertTrue(actualReceiveMessageResult.getMessages().isEmpty());
+
+        ArgumentCaptor<DeleteMessageRequest> deleteMessageRequestArgumentCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(mockSqsBackend).deleteMessage(deleteMessageRequestArgumentCaptor.capture());
+        Assert.assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().getQueueUrl());
+        Assert.assertEquals("receipt-handle", deleteMessageRequestArgumentCaptor.getValue().getReceiptHandle());
+    }
+
+    @Test
+    public void testWhenIgnorePayloadNotFoundIsNotSentThenNotFoundKeysInS3AreNotDeletedInSQS() {
+        AmazonServiceException mockException = mock(AmazonServiceException.class);
+        when(mockException.getErrorCode()).thenReturn("NoSuchKey");
+
+        Message message = new Message().addMessageAttributesEntry(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, mock(MessageAttributeValue.class));
+        String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson();
+        message.setBody(pointer);
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(new ReceiveMessageResult().withMessages(message));
+
+        doThrow(mockException).when(mockS3).getObject(any(GetObjectRequest.class));
+        ReceiveMessageRequest messageRequest = new ReceiveMessageRequest();
+
+        try {
+            extendedSqsWithDefaultConfig.receiveMessage(messageRequest);
+            Assert.fail("exception should have been thrown");
+        } catch (AmazonServiceException e) {
+            verify(mockSqsBackend, never()).deleteMessage(any(DeleteMessageRequest.class));
+        }
     }
 
     @Test
