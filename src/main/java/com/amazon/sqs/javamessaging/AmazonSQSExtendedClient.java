@@ -25,11 +25,14 @@ import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import software.amazon.awssdk.awscore.AwsRequest;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.util.VersionInfo;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
@@ -94,8 +97,8 @@ import software.amazon.payloadoffloading.Util;
  * </ul>
  */
 public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase implements SqsClient {
-    static final String USER_AGENT_HEADER = Util.getUserAgentHeader(AmazonSQSExtendedClient.class.getSimpleName());
-    static final String USER_AGENT_HEADER_NAME = "User-Agent";
+    static final String USER_AGENT_NAME = AmazonSQSExtendedClient.class.getSimpleName();
+    static final String USER_AGENT_VERSION = VersionInfo.SDK_VERSION;
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClient.class);
     static final String LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
@@ -188,11 +191,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
-        sendMessageRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
-        sendMessageRequest = sendMessageRequestBuilder.build();
+        sendMessageRequest = appendUserAgent(sendMessageRequestBuilder).build();
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.sendMessage(sendMessageRequest);
@@ -314,10 +313,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
-        receiveMessageRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
+        appendUserAgent(receiveMessageRequestBuilder);
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.receiveMessage(receiveMessageRequestBuilder.build());
@@ -416,10 +412,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         DeleteMessageRequest.Builder deleteMessageRequestBuilder = deleteMessageRequest.toBuilder();
-        deleteMessageRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
+        appendUserAgent(deleteMessageRequestBuilder);
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.deleteMessage(deleteMessageRequestBuilder.build());
@@ -615,10 +608,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequest.toBuilder();
-        sendMessageBatchRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
+        appendUserAgent(sendMessageBatchRequestBuilder);
         sendMessageBatchRequest = sendMessageBatchRequestBuilder.build();
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
@@ -693,10 +683,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         DeleteMessageBatchRequest.Builder deleteMessageBatchRequestBuilder = deleteMessageBatchRequest.toBuilder();
-        deleteMessageBatchRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
+        appendUserAgent(deleteMessageBatchRequestBuilder);
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.deleteMessageBatch(deleteMessageBatchRequest);
@@ -839,10 +826,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         PurgeQueueRequest.Builder purgeQueueRequestBuilder = purgeQueueRequest.toBuilder();
-        purgeQueueRequestBuilder.overrideConfiguration(
-            AwsRequestOverrideConfiguration.builder()
-                .putHeader(USER_AGENT_HEADER_NAME, USER_AGENT_HEADER)
-                .build());
+        appendUserAgent(purgeQueueRequestBuilder);
 
         return super.purgeQueue(purgeQueueRequestBuilder.build());
     }
@@ -1016,5 +1000,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             updatedMessageAttributes.put(LEGACY_RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
         }
         return updatedMessageAttributes;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
+        return (T) builder
+                .overrideConfiguration(
+                        AwsRequestOverrideConfiguration.builder()
+                                .addApiName(ApiName.builder().name(USER_AGENT_NAME)
+                                        .version(USER_AGENT_VERSION).build())
+                                .build());
     }
 }
