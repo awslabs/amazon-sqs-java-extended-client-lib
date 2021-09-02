@@ -61,6 +61,7 @@ import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VE
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.when;
@@ -127,7 +128,7 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testWhenSendMessageWithLargePayloadSupportDisabledThenS3IsNotUsedAndSqsBackendIsResponsibleToFailItWithDeprecatedMethod() {
-        int messageLength = 1;
+        int messageLength = MORE_THAN_SQS_SIZE_LIMIT;
         String messageBody = generateStringWithLength(messageLength);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
                 .withLargePayloadSupportDisabled();
@@ -295,7 +296,7 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testWhenSendMessageWithLargePayloadSupportDisabledThenS3IsNotUsedAndSqsBackendIsResponsibleToFailIt() {
-        String messageBody = generateStringWithLength(1);
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
                 .withPayloadSupportDisabled();
         SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));

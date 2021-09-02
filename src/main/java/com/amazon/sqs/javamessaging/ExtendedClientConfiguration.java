@@ -31,6 +31,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
 
     private boolean cleanupS3Payload = true;
     private boolean useLegacyReservedAttributeName = true;
+    private boolean ignorePayloadNotFound = false;
 
     public ExtendedClientConfiguration() {
         super();
@@ -41,6 +42,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         super(other);
         this.cleanupS3Payload = other.doesCleanupS3Payload();
         this.useLegacyReservedAttributeName = other.usesLegacyReservedAttributeName();
+        this.ignorePayloadNotFound = other.ignoresPayloadNotFound();
     }
 
     /**
@@ -101,6 +103,32 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     }
 
     /**
+     * Sets whether or not messages should be removed from Amazon SQS
+     * when payloads are not found in Amazon S3.
+     *
+     * @param ignorePayloadNotFound
+     *            Whether or not messages should be removed from Amazon SQS
+     *            when payloads are not found in Amazon S3. Default: false
+     */
+    public void setIgnorePayloadNotFound(boolean ignorePayloadNotFound) {
+        this.ignorePayloadNotFound = ignorePayloadNotFound;
+    }
+
+    /**
+     * Sets whether or not messages should be removed from Amazon SQS
+     * when payloads are not found in Amazon S3.
+     *
+     * @param ignorePayloadNotFound
+     *            Whether or not messages should be removed from Amazon SQS
+     *            when payloads are not found in Amazon S3. Default: false
+     * @return the updated ExtendedClientConfiguration object.
+     */
+    public ExtendedClientConfiguration withIgnorePayloadNotFound(boolean ignorePayloadNotFound) {
+        setIgnorePayloadNotFound(ignorePayloadNotFound);
+        return this;
+    }
+
+    /**
      * Checks whether or not clean up large objects in S3 is enabled.
      *
      * @return True if clean up is enabled when deleting the concerning SQS message.
@@ -119,6 +147,17 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
 
     public boolean usesLegacyReservedAttributeName() {
         return useLegacyReservedAttributeName;
+    }
+
+    /**
+     * Checks whether or not messages should be removed from Amazon SQS
+     * when payloads are not found in Amazon S3.
+     *
+     * @return True if messages should be removed from Amazon SQS
+     *         when payloads are not found in Amazon S3. Default: false
+     */
+    public boolean ignoresPayloadNotFound() {
+        return ignorePayloadNotFound;
     }
 
     @Override
