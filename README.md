@@ -20,6 +20,17 @@ For more information on using the amazon-sqs-java-extended-client-lib, see our g
 * **Sign up for Amazon SQS** -- Go to the Amazon [SQS console](https://console.aws.amazon.com/sqs/home?region=us-east-1) to sign up for the service.
 * **Minimum requirements** -- To use the sample application, you'll need Java 7 (or later) and [Maven 3](http://maven.apache.org/). For more information about the requirements, see the [Getting Started](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/s3-messages.html) section of the Amazon SQS Developer Guide.
 * **Download** -- Download the [latest preview release](https://github.com/awslabs/amazon-sqs-java-extended-client-lib/releases) or pick it up from Maven:
+### Version 2.x
+```xml
+  <dependency>
+    <groupId>com.amazonaws</groupId>
+    <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
+    <version>2.0.0</version>
+    <type>jar</type>
+  </dependency>
+```   
+
+### Version 1.x
 ```xml
   <dependency>
     <groupId>com.amazonaws</groupId>
@@ -27,7 +38,7 @@ For more information on using the amazon-sqs-java-extended-client-lib, see our g
     <version>1.2.2</version>
     <type>jar</type>
   </dependency>
-```
+```      
 * **Further information** - Read the [API documentation](http://aws.amazon.com/documentation/sqs/).
 
 ## Feedback
