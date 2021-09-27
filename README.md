@@ -24,7 +24,7 @@ For more information on using the amazon-sqs-java-extended-client-lib, see our g
   <dependency>
     <groupId>com.amazonaws</groupId>
     <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-    <version>1.2.1</version>
+    <version>1.2.2</version>
     <type>jar</type>
   </dependency>
 ```
