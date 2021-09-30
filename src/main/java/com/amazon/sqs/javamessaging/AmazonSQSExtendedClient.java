@@ -15,7 +15,6 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.lang.UnsupportedOperationException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -182,6 +181,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessage" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) {
         //TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
         if (sendMessageRequest == null) {
@@ -304,6 +304,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ReceiveMessage" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public ReceiveMessageResponse receiveMessage(ReceiveMessageRequest receiveMessageRequest) {
         //TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
         if (receiveMessageRequest == null) {
@@ -344,13 +345,12 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 // remove the additional attribute before returning the message
                 // to user.
                 Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
-                messageAttributes.keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
+                RESERVED_ATTRIBUTE_NAMES.forEach(messageAttributes.keySet()::remove);
                 messageBuilder.messageAttributes(messageAttributes);
 
                 // Embed s3 object pointer in the receipt handle.
                 String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
-                        message.receiptHandle(),
-                        largeMessagePointer);
+                        message.receiptHandle(), largeMessagePointer);
 
                 messageBuilder.receiptHandle(modifiedReceiptHandle);
             }
@@ -403,6 +403,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessage" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public DeleteMessageResponse deleteMessage(DeleteMessageRequest deleteMessageRequest) {
 
         if (deleteMessageRequest == null) {
@@ -521,6 +522,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibility" target="_top">AWS
      *      API Documentation</a>
      */
+    @Override
     public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest changeMessageVisibilityRequest)
             throws AwsServiceException, SdkClientException {
 
@@ -599,6 +601,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/SendMessageBatch" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public SendMessageBatchResponse sendMessageBatch(SendMessageBatchRequest sendMessageBatchRequest) {
 
         if (sendMessageBatchRequest == null) {
@@ -609,7 +612,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
         SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequest.toBuilder();
         appendUserAgent(sendMessageBatchRequestBuilder);
-        sendMessageBatchRequest = sendMessageBatchRequestBuilder.build();
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             return super.sendMessageBatch(sendMessageBatchRequest);
@@ -627,6 +629,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             batchEntries.add(entry);
         }
 
+        sendMessageBatchRequestBuilder.entries(batchEntries);
+        sendMessageBatchRequest = sendMessageBatchRequestBuilder.build();
         return super.sendMessageBatch(sendMessageBatchRequest);
     }
 
@@ -674,6 +678,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/DeleteMessageBatch" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public DeleteMessageBatchResponse deleteMessageBatch(DeleteMessageBatchRequest deleteMessageBatchRequest) {
 
         if (deleteMessageBatchRequest == null) {
@@ -758,6 +763,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/ChangeMessageVisibilityBatch"
      *      target="_top">AWS API Documentation</a>
      */
+    @Override
     public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(
             ChangeMessageVisibilityBatchRequest changeMessageVisibilityBatchRequest) throws AwsServiceException,
             SdkClientException {
@@ -815,6 +821,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @see <a href="http://docs.aws.amazon.com/goto/WebAPI/sqs-2012-11-05/PurgeQueue" target="_top">AWS API
      *      Documentation</a>
      */
+    @Override
     public PurgeQueueResponse purgeQueue(PurgeQueueRequest purgeQueueRequest)
             throws AwsServiceException, SdkClientException {
         LOG.warn("Calling purgeQueue deletes SQS messages without deleting their payload from S3.");
@@ -868,10 +875,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         String s3MsgBucketName = s3Pointer.getS3BucketName();
         String s3MsgKey = s3Pointer.getS3Key();
 
-        String modifiedReceiptHandle = SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
-                + SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
-                + s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
-        return modifiedReceiptHandle;
+        return SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
+            + SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
+            + s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
     }
 
     private String getOrigReceiptHandle(String receiptHandle) {
