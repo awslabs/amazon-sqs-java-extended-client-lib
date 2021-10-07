@@ -322,7 +322,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         List<String> messageAttributeNames = new ArrayList<>(receiveMessageRequest.messageAttributeNames());
         messageAttributeNames.removeAll(RESERVED_ATTRIBUTE_NAMES);
         messageAttributeNames.addAll(RESERVED_ATTRIBUTE_NAMES);
-        receiveMessageRequestBuilder.attributeNamesWithStrings(messageAttributeNames);
+        receiveMessageRequestBuilder.messageAttributeNames(messageAttributeNames);
         receiveMessageRequest = receiveMessageRequestBuilder.build();
 
         ReceiveMessageResponse receiveMessageResponse = super.receiveMessage(receiveMessageRequest);
