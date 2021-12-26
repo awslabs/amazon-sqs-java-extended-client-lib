@@ -617,14 +617,20 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
         List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>(sendMessageBatchRequest.entries().size());
 
+        boolean hasS3Entries = false;
         for (SendMessageBatchRequestEntry entry : sendMessageBatchRequest.entries()) {
             //Check message attributes for ExtendedClient related constraints
             checkMessageAttributes(entry.messageAttributes());
 
             if (clientConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
                 entry = storeMessageInS3(entry);
+                hasS3Entries = true;
             }
             batchEntries.add(entry);
+        }
+
+        if (hasS3Entries) {
+            sendMessageBatchRequest = sendMessageBatchRequest.toBuilder().entries(batchEntries).build();
         }
 
         return super.sendMessageBatch(sendMessageBatchRequest);
