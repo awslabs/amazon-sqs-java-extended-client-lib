@@ -59,6 +59,7 @@ import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -427,6 +428,34 @@ public class AmazonSQSExtendedClientTest {
 
         // There should be 8 puts for the 8 messages above the threshold
         verify(mockS3, times(8)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
+    }
+
+    @Test
+    public void testWhenMessageBatchIsLargeS3PointerIsCorrectlySentToSQSAndNotOriginalMessage() {
+        String messageBody = generateStringWithLength(LESS_THAN_SQS_SIZE_LIMIT);
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME).withAlwaysThroughS3(true);
+
+        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<SendMessageBatchRequestEntry>();
+        for (int i = 0; i < 10; i++) {
+            SendMessageBatchRequestEntry entry = SendMessageBatchRequestEntry.builder()
+                    .id("entry_" + i)
+                    .messageBody(messageBody)
+                    .build();
+            batchEntries.add(entry);
+        }
+        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder().queueUrl(SQS_QUEUE_URL).entries(batchEntries).build();
+
+        sqsExtended.sendMessageBatch(batchRequest);
+
+        ArgumentCaptor<SendMessageBatchRequest> sendMessageRequestCaptor = ArgumentCaptor.forClass(SendMessageBatchRequest.class);
+        verify(mockSqsBackend).sendMessageBatch(sendMessageRequestCaptor.capture());
+
+        for (SendMessageBatchRequestEntry entry : sendMessageRequestCaptor.getValue().entries()) {
+            assertNotEquals(messageBody, entry.messageBody());
+        }
     }
 
     @Test
