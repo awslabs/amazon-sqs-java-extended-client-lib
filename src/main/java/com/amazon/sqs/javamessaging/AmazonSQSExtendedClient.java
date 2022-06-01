@@ -331,34 +331,47 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         List<Message> messages = receiveMessageResponse.messages();
         List<Message> modifiedMessages = new ArrayList<>(messages.size());
         for (Message message : messages) {
-            Message.Builder messageBuilder = message.toBuilder();
-
-            // for each received message check if they are stored in S3.
-            Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
-            if (largePayloadAttributeName.isPresent()) {
-                String largeMessagePointer = message.body();
-                largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
-
-                messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
-
-                // remove the additional attribute before returning the message
-                // to user.
-                Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
-                messageAttributes.keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
-                messageBuilder.messageAttributes(messageAttributes);
-
-                // Embed s3 object pointer in the receipt handle.
-                String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
-                        message.receiptHandle(),
-                        largeMessagePointer);
-
-                messageBuilder.receiptHandle(modifiedReceiptHandle);
-            }
-            modifiedMessages.add(messageBuilder.build());
+            Message convertedMessage = convertMessage(message);
+            modifiedMessages.add(convertedMessage);
         }
 
         receiveMessageResponseBuilder.messages(modifiedMessages);
         return receiveMessageResponseBuilder.build();
+    }
+
+    /**
+     * Convert an incoming message (which has a potential large payload) into a standard SQS message
+     * by downloading the payload.
+     *
+     * @param message the incoming SQS message
+     * @return the message with any large payload downloaded and added as the body
+     */
+    public Message convertMessage(Message message) {
+        Message.Builder messageBuilder = message.toBuilder();
+
+        // for each received message check if they are stored in S3.
+        Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
+        if (largePayloadAttributeName.isPresent()) {
+            String largeMessagePointer = message.body();
+            largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
+
+            messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
+
+            // remove the additional attribute before returning the message
+            // to user.
+            Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
+            messageAttributes.keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
+            messageBuilder.messageAttributes(messageAttributes);
+
+            // Embed s3 object pointer in the receipt handle.
+            String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
+                    message.receiptHandle(),
+                    largeMessagePointer);
+
+            messageBuilder.receiptHandle(modifiedReceiptHandle);
+        }
+
+        return messageBuilder.build();
     }
 
     /**
