@@ -210,7 +210,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                     // For each received message check if they are stored in S3.
                     Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(
                         message.messageAttributes());
-                    if (largePayloadAttributeName.isPresent()) {
+                    if (!largePayloadAttributeName.isPresent()) {
                         // Not S3
                         modifiedMessageFutures.add(CompletableFuture.completedFuture(messageBuilder.build()));
                     } else {
@@ -361,6 +361,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
             if (clientConfiguration.isAlwaysThroughS3()
                 || isLarge(clientConfiguration.getPayloadSizeThreshold(), entry)) {
                 batchEntryFutures.add(storeMessageInS3(entry));
+                hasS3Entries = true;
             } else {
                 batchEntryFutures.add(CompletableFuture.completedFuture(entry));
             }
