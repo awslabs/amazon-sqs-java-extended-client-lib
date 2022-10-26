@@ -51,9 +51,14 @@ import software.amazon.payloadoffloading.Util;
 
 /**
  * Amazon SQS Extended Async Client extends the functionality of Amazon Async SQS
- * client. All service calls made using this client are asynchronous, and will return
+ * client.
+ *
+ * <p>
+ * All service calls made using this client are asynchronous, and will return
  * immediately with a {@link CompletableFuture} that completes when the operation
- * completes or when an exception is thrown.
+ * completes or when an exception is thrown. Argument validation exceptions are thrown
+ * immediately, and not through the future.
+ * </p>
  *
  * <p>
  * The Amazon SQS extended client enables sending and receiving large messages
@@ -85,7 +90,9 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
      * <p>
      * All service calls made using this client are asynchronous, and will return
      * immediately with a {@link CompletableFuture} that completes when the operation
-     * completes or when an exception is thrown.
+     * completes or when an exception is thrown. Argument validation exceptions are thrown
+     * immediately, and not through the future.
+     * </p>
      *
      * @param sqsClient
      *            The Amazon SQS async client to use to connect to Amazon SQS.
@@ -102,7 +109,9 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
      * <p>
      * All service calls made using this client are asynchronous, and will return
      * immediately with a {@link CompletableFuture} that completes when the operation
-     * completes or when an exception is thrown.
+     * completes or when an exception is thrown. Argument validation exceptions are thrown
+     * immediately, and not through the future.
+     * </p>
      *
      * @param sqsClient
      *            The Amazon SQS async client to use to connect to Amazon SQS.
@@ -130,9 +139,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (sendMessageRequest == null) {
             String errorMessage = "sendMessageRequest cannot be null.";
             LOG.error(errorMessage);
-            CompletableFuture<SendMessageResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(SdkClientException.create(errorMessage));
-            return futureEx;
+            throw SdkClientException.create(errorMessage);
         }
 
         SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
@@ -145,19 +152,11 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (StringUtils.isEmpty(sendMessageRequest.messageBody())) {
             String errorMessage = "messageBody cannot be null or empty.";
             LOG.error(errorMessage);
-            CompletableFuture<SendMessageResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(SdkClientException.create(errorMessage));
-            return futureEx;
+            throw SdkClientException.create(errorMessage);
         }
 
         //Check message attributes for ExtendedClient related constraints
-        try {
-            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest.messageAttributes());
-        } catch (SdkClientException e) {
-            CompletableFuture<SendMessageResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(e);
-            return futureEx;
-        }
+        checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest.messageAttributes());
 
         if (clientConfiguration.isAlwaysThroughS3()
             || isLarge(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest)) {
@@ -178,10 +177,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (receiveMessageRequest == null) {
             String errorMessage = "receiveMessageRequest cannot be null.";
             LOG.error(errorMessage);
-
-            CompletableFuture<ReceiveMessageResponse> future = new CompletableFuture<>();
-            future.completeExceptionally(SdkClientException.create(errorMessage));
-            return future;
+            throw SdkClientException.create(errorMessage);
         }
 
         ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
@@ -266,10 +262,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (deleteMessageRequest == null) {
             String errorMessage = "deleteMessageRequest cannot be null.";
             LOG.error(errorMessage);
-
-            CompletableFuture<DeleteMessageResponse> future = new CompletableFuture<>();
-            future.completeExceptionally(SdkClientException.create(errorMessage));
-            return future;
+            throw SdkClientException.create(errorMessage);
         }
 
         DeleteMessageRequest.Builder deleteMessageRequestBuilder = deleteMessageRequest.toBuilder();
@@ -332,9 +325,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (sendMessageBatchRequestIn == null) {
             String errorMessage = "sendMessageBatchRequest cannot be null.";
             LOG.error(errorMessage);
-            CompletableFuture<SendMessageBatchResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(SdkClientException.create(errorMessage));
-            return futureEx;
+            throw SdkClientException.create(errorMessage);
         }
 
         SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequestIn.toBuilder();
@@ -350,13 +341,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         boolean hasS3Entries = false;
         for (SendMessageBatchRequestEntry entry : sendMessageBatchRequest.entries()) {
             //Check message attributes for ExtendedClient related constraints
-            try {
-                checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), entry.messageAttributes());
-            } catch (SdkClientException e) {
-                CompletableFuture<SendMessageBatchResponse> futureEx = new CompletableFuture<>();
-                futureEx.completeExceptionally(e);
-                return futureEx;
-            }
+            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), entry.messageAttributes());
 
             if (clientConfiguration.isAlwaysThroughS3()
                 || isLarge(clientConfiguration.getPayloadSizeThreshold(), entry)) {
@@ -394,9 +379,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (deleteMessageBatchRequest == null) {
             String errorMessage = "deleteMessageBatchRequest cannot be null.";
             LOG.error(errorMessage);
-            CompletableFuture<DeleteMessageBatchResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(SdkClientException.create(errorMessage));
-            return futureEx;
+            throw SdkClientException.create(errorMessage);
         }
 
         DeleteMessageBatchRequest.Builder deleteMessageBatchRequestBuilder = deleteMessageBatchRequest.toBuilder();
@@ -460,9 +443,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         if (purgeQueueRequest == null) {
             String errorMessage = "purgeQueueRequest cannot be null.";
             LOG.error(errorMessage);
-            CompletableFuture<PurgeQueueResponse> futureEx = new CompletableFuture<>();
-            futureEx.completeExceptionally(SdkClientException.create(errorMessage));
-            return futureEx;
+            throw SdkClientException.create(errorMessage);
         }
 
         PurgeQueueRequest.Builder purgeQueueRequestBuilder = purgeQueueRequest.toBuilder();
