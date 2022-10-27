@@ -196,9 +196,13 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
 
         return super.receiveMessage(receiveMessageRequest)
             .thenCompose(receiveMessageResponse -> {
-                ReceiveMessageResponse.Builder receiveMessageResponseBuilder = receiveMessageResponse.toBuilder();
-
                 List<Message> messages = receiveMessageResponse.messages();
+
+                // Check for no messages. If so, no need to process further.
+                if (messages.isEmpty()) {
+                    return CompletableFuture.completedFuture(messages);
+                }
+
                 List<CompletableFuture<Message>> modifiedMessageFutures = new ArrayList<>(messages.size());
                 for (Message message : messages) {
                     Message.Builder messageBuilder = message.toBuilder();
