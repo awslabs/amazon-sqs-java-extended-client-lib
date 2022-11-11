@@ -1017,4 +1017,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                                         .version(USER_AGENT_VERSION).build())
                                 .build());
     }
+
+	@Override
+	public void close() {
+		super.close();
+		this.clientConfiguration.getS3Client().close();
+	}    
+    
 }
