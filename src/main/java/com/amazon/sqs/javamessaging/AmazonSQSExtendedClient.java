@@ -33,6 +33,7 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.util.VersionInfo;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
@@ -339,7 +340,20 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 String largeMessagePointer = message.body();
                 largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
 
-                messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
+                try {
+                    messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
+                } catch (SdkException e) {
+                    if (e.getCause() instanceof NoSuchKeyException && clientConfiguration.ignoresPayloadNotFound()) {
+                        DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+                                .builder()
+                                .queueUrl(receiveMessageRequest.queueUrl())
+                                .receiptHandle(message.receiptHandle())
+                                .build();
+                        deleteMessage(deleteMessageRequest);
+                        LOG.warn("Message deleted from SQS since payload with pointer could not be found in S3.");
+                        continue;
+                    } else throw e;
+                }
 
                 // remove the additional attribute before returning the message
                 // to user.
