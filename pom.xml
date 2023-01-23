@@ -6,7 +6,7 @@
 
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.2.3</version>
+  <version>1.2.4</version>
   <packaging>jar</packaging>
   <name>Amazon SQS Extended Client Library for Java</name>
   <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon S3.
@@ -55,7 +55,7 @@
     <dependency>
       <groupId>software.amazon.payloadoffloading</groupId>
       <artifactId>payloadoffloading-common</artifactId>
-      <version>1.1.0</version>
+      <version>1.1.2</version>
     </dependency>
 
     <dependency>
