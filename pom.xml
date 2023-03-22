@@ -37,7 +37,7 @@
   </developers>
 
   <properties>
-    <aws-java-sdk.version>2.14.19</aws-java-sdk.version>
+    <aws-java-sdk.version>2.20.29</aws-java-sdk.version>
   </properties>
 
   <dependencies>
