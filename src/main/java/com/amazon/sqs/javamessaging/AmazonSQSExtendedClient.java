@@ -15,10 +15,6 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.Map.Entry;
-
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -53,10 +49,21 @@ import com.amazonaws.services.sqs.model.SendMessageBatchResult;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import software.amazon.payloadoffloading.*;
+import software.amazon.payloadoffloading.PayloadS3Pointer;
+import software.amazon.payloadoffloading.PayloadStore;
+import software.amazon.payloadoffloading.S3BackedPayloadStore;
+import software.amazon.payloadoffloading.S3Dao;
+import software.amazon.payloadoffloading.Util;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
 
 
 /**
