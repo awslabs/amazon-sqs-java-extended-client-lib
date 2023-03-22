@@ -15,23 +15,28 @@
 
 package com.amazon.sqs.javamessaging;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.payloadoffloading.ServerSideEncryptionFactory;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
 
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.mockito.Mockito.mock;
+
 
 /**
  * Tests the ExtendedClientConfiguration class.
  */
 public class ExtendedClientConfigurationTest {
 
-    private static String s3BucketName = "test-bucket-name";
-    private static String s3ServerSideEncryptionKMSKeyId = "test-customer-managed-kms-key-id";
-    private static ServerSideEncryptionStrategy serverSideEncryptionStrategy = ServerSideEncryptionFactory.customerKey(s3ServerSideEncryptionKMSKeyId);
+    private static final String s3BucketName = "test-bucket-name";
+    private static final String s3ServerSideEncryptionKMSKeyId = "test-customer-managed-kms-key-id";
+    private static final ServerSideEncryptionStrategy serverSideEncryptionStrategy = ServerSideEncryptionFactory.customerKey(s3ServerSideEncryptionKMSKeyId);
 
     @Test
     public void testCopyConstructor() {
@@ -49,15 +54,15 @@ public class ExtendedClientConfigurationTest {
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
-        Assert.assertEquals(s3, newExtendedClientConfig.getS3Client());
-        Assert.assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
-        Assert.assertEquals(serverSideEncryptionStrategy, newExtendedClientConfig.getServerSideEncryptionStrategy());
-        Assert.assertTrue(newExtendedClientConfig.isPayloadSupportEnabled());
-        Assert.assertEquals(doesCleanupS3Payload, newExtendedClientConfig.doesCleanupS3Payload());
-        Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
-        Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
+        assertEquals(s3, newExtendedClientConfig.getS3Client());
+        assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
+        assertEquals(serverSideEncryptionStrategy, newExtendedClientConfig.getServerSideEncryptionStrategy());
+        assertTrue(newExtendedClientConfig.isPayloadSupportEnabled());
+        assertEquals(doesCleanupS3Payload, newExtendedClientConfig.doesCleanupS3Payload());
+        assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
+        assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
 
-        Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
+        assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }
 
     @Test
@@ -66,10 +71,10 @@ public class ExtendedClientConfigurationTest {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3Client());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3Client());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
 
     }
 
@@ -80,10 +85,10 @@ public class ExtendedClientConfigurationTest {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName, true);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3Client());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3Client());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
 
     @Test
@@ -92,65 +97,58 @@ public class ExtendedClientConfigurationTest {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName, false);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertFalse(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3Client());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertFalse(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3Client());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
 
     @Test
     public void testCopyConstructorDeprecated() {
-
         S3Client s3 = mock(S3Client.class);
-//        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
         boolean alwaysThroughS3 = true;
         int messageSizeThreshold = 500;
 
         ExtendedClientConfiguration extendedClientConfig = new ExtendedClientConfiguration();
 
-        extendedClientConfig.withLargePayloadSupportEnabled(s3, s3BucketName)
-                .withAlwaysThroughS3(alwaysThroughS3).withMessageSizeThreshold(messageSizeThreshold);
+        extendedClientConfig.withPayloadSupportEnabled(s3, s3BucketName)
+                .withAlwaysThroughS3(alwaysThroughS3).withPayloadSizeThreshold(messageSizeThreshold);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
-        Assert.assertEquals(s3, newExtendedClientConfig.getS3Client());
-        Assert.assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
-        Assert.assertTrue(newExtendedClientConfig.isLargePayloadSupportEnabled());
-        Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
-        Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getMessageSizeThreshold());
+        assertEquals(s3, newExtendedClientConfig.getS3Client());
+        assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
+        assertTrue(newExtendedClientConfig.isPayloadSupportEnabled());
+        assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
+        assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
 
-        Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
+        assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }
 
     @Test
     public void testLargePayloadSupportEnabled() {
 
         S3Client s3 = mock(S3Client.class);
-//        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.setLargePayloadSupportEnabled(s3, s3BucketName);
+        extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName);
 
-        Assert.assertTrue(extendedClientConfiguration.isLargePayloadSupportEnabled());
-        Assert.assertNotNull(extendedClientConfiguration.getS3Client());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertNotNull(extendedClientConfiguration.getS3Client());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
 
     }
 
     @Test
     public void testDisableLargePayloadSupport() {
-
         S3Client s3 = mock(S3Client.class);
-//        when(s3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
 
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.setLargePayloadSupportDisabled();
+        extendedClientConfiguration.setPayloadSupportDisabled();
 
-        Assert.assertNull(extendedClientConfiguration.getS3Client());
-        Assert.assertNull(extendedClientConfiguration.getS3BucketName());
-
-//        verify(s3, never()).putObject(isA(PutObjectRequest.class));
+        assertNull(extendedClientConfiguration.getS3Client());
+        assertNull(extendedClientConfiguration.getS3BucketName());
     }
 
     @Test
@@ -158,12 +156,12 @@ public class ExtendedClientConfigurationTest {
 
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
 
-        Assert.assertEquals(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD,
-                extendedClientConfiguration.getMessageSizeThreshold());
+        assertEquals(SQSExtendedClientConstants.DEFAULT_MESSAGE_SIZE_THRESHOLD,
+                extendedClientConfiguration.getPayloadSizeThreshold());
 
         int messageLength = 1000;
-        extendedClientConfiguration.setMessageSizeThreshold(messageLength);
-        Assert.assertEquals(messageLength, extendedClientConfiguration.getMessageSizeThreshold());
+        extendedClientConfiguration.setPayloadSizeThreshold(messageLength);
+        assertEquals(messageLength, extendedClientConfiguration.getPayloadSizeThreshold());
 
     }
 }
