@@ -104,7 +104,7 @@ abstract class AmazonSQSExtendedClientBase implements AmazonSQS {
      * <b>IMPORTANT:</b> The following list shows the characters (in
      * Unicode) allowed in your message, according to the W3C XML
      * specification. For more information, go to
-     * http://www.w3.org/TR/REC-xml/#charsets If you send any characters not
+     * <a href="http://www.w3.org/TR/REC-xml/#charsets">...</a> If you send any characters not
      * included in the list, your request will be rejected. #x9 | #xA | #xD |
      * [#x20 to #xD7FF] | [#xE000 to #xFFFD] | [#x10000 to #x10FFFF]
      * </p>
