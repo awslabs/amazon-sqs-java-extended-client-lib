@@ -37,7 +37,7 @@
   </developers>
 
   <properties>
-    <aws-java-sdk.version>2.20.30</aws-java-sdk.version>
+    <aws-java-sdk.version>2.20.130</aws-java-sdk.version>
   </properties>
 
   <dependencies>
