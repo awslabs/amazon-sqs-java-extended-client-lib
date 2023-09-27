@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -965,7 +966,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             updateMessageAttributePayloadSize(batchEntry.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         batchEntryBuilder.messageBody(largeMessagePointer);
 
         return batchEntryBuilder.build();
@@ -984,10 +985,18 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), messageContentSize));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         sendMessageRequestBuilder.messageBody(largeMessagePointer);
 
         return sendMessageRequestBuilder.build();
+    }
+
+    private String storeOriginalPayload(String messageContentStr) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isBlank(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr);
+        }
+        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
     }
 
     private Map<String, MessageAttributeValue> updateMessageAttributePayloadSize(

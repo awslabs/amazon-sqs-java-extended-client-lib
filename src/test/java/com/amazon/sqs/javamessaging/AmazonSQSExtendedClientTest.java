@@ -15,9 +15,13 @@
 
 package com.amazon.sqs.javamessaging;
 
+import static com.amazon.sqs.javamessaging.StringTestUtil.generateStringWithLength;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -62,9 +66,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -82,11 +88,16 @@ public class AmazonSQSExtendedClientTest {
     private SqsClient extendedSqsWithDefaultKMS;
     private SqsClient extendedSqsWithGenericReservedAttributeName;
     private SqsClient extendedSqsWithDeprecatedMethods;
+    private SqsClient extendedSqsWithS3KeyPrefix;
     private SqsClient mockSqsBackend;
     private S3Client mockS3;
+
+    private MockedStatic<UUID> uuidMockStatic;
     private static final String S3_BUCKET_NAME = "test-bucket-name";
     private static final String SQS_QUEUE_URL = "test-queue-url";
     private static final String S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID = "test-customer-managed-kms-key-id";
+    private static final String S3_KEY_PREFIX = "test-s3-key-prefix";
+    private static final String S3_KEY_UUID = "test-s3-key-uuid";
 
     private static final int LESS_THAN_SQS_SIZE_LIMIT = 3;
     private static final int SQS_SIZE_LIMIT = 262144;
@@ -101,6 +112,7 @@ public class AmazonSQSExtendedClientTest {
 
     @BeforeEach
     public void setupClients() {
+        uuidMockStatic = mockStatic(UUID.class);
         mockS3 = mock(S3Client.class);
         mockSqsBackend = mock(SqsClient.class);
         when(mockS3.putObject(isA(PutObjectRequest.class), isA(RequestBody.class))).thenReturn(null);
@@ -121,11 +133,25 @@ public class AmazonSQSExtendedClientTest {
 
         ExtendedClientConfiguration extendedClientConfigurationDeprecated = new ExtendedClientConfiguration().withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
 
+        ExtendedClientConfiguration extendedClientConfigurationWithS3KeyPrefix = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withS3KeyPrefix(S3_KEY_PREFIX);
+
+        UUID uuidMock = mock(UUID.class);
+        when(uuidMock.toString()).thenReturn(S3_KEY_UUID);
+        uuidMockStatic.when(UUID::randomUUID).thenReturn(uuidMock);
+
         extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
         extendedSqsWithCustomKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithCustomKMS));
         extendedSqsWithDefaultKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithDefaultKMS));
         extendedSqsWithGenericReservedAttributeName = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithGenericReservedAttributeName));
         extendedSqsWithDeprecatedMethods = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationDeprecated));
+        extendedSqsWithS3KeyPrefix = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithS3KeyPrefix));
+    }
+
+    @AfterEach
+    public void tearDown() {
+        uuidMockStatic.close();
     }
 
     @Test
@@ -617,6 +643,32 @@ public class AmazonSQSExtendedClientTest {
         assertEquals(expected, captor.getValue().acl());
     }
 
+    @Test
+    public void testWhenSendLargeMessageWithS3PrefixKeyDefined() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+
+        extendedSqsWithS3KeyPrefix.sendMessage(messageRequest);
+
+        verify(mockS3, times(1)).putObject(
+            argThat((PutObjectRequest obj) -> obj.key().equals(S3_KEY_PREFIX + S3_KEY_UUID)),
+            isA(RequestBody.class));
+    }
+
+    @Test
+    public void testWhenSendLargeMessageWithUndefinedS3PrefixKey() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
+
+        verify(mockS3, times(1)).putObject(
+            argThat((PutObjectRequest obj) -> obj.key().equals(S3_KEY_UUID)),
+            isA(RequestBody.class));
+    }
+
     private void testReceiveMessage_when_MessageIsLarge(String reservedAttributeName) {
         String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson();
         Message message = Message.builder()
@@ -665,11 +717,4 @@ public class AmazonSQSExtendedClientTest {
     private String getSampleLargeReceiptHandle(String originalReceiptHandle) {
         return getLargeReceiptHandle(UUID.randomUUID().toString(), originalReceiptHandle);
     }
-
-    private String generateStringWithLength(int messageLength) {
-        char[] charArray = new char[messageLength];
-        Arrays.fill(charArray, 'x');
-        return new String(charArray);
-    }
-
 }
