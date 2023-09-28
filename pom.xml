@@ -6,7 +6,7 @@
 
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-extended-client-lib</artifactId>
-  <version>1.2.4</version>
+  <version>1.2.5</version>
   <packaging>jar</packaging>
   <name>Amazon SQS Extended Client Library for Java</name>
   <description>An extension to the Amazon SQS client that enables sending and receiving messages up to 2GB via Amazon S3.
@@ -37,7 +37,7 @@
   </developers>
 
   <properties>
-    <aws-java-sdk.version>1.12.433</aws-java-sdk.version>
+    <aws-java-sdk.version>1.12.558</aws-java-sdk.version>
   </properties>
 
   <dependencies>
@@ -61,13 +61,13 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.9.2</version>
+      <version>5.10.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>5.2.0</version>
+      <version>5.5.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -103,12 +103,12 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.1.2</version>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.5.0</version>
+        <version>3.6.0</version>
         <executions>
           <execution>
             <id>attach-javadocs</id>
