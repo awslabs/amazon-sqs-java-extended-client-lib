@@ -15,16 +15,22 @@
 
 package com.amazon.sqs.javamessaging;
 
+import static com.amazon.sqs.javamessaging.StringTestUtil.generateStringWithLength;
+
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
@@ -172,5 +178,69 @@ public class ExtendedClientConfigurationTest {
         extendedClientConfiguration.setPayloadSizeThreshold(messageLength);
         assertEquals(messageLength, extendedClientConfiguration.getPayloadSizeThreshold());
 
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "test-s3-key-prefix",
+            "TEST-S3-KEY-PREFIX",
+            "test.s3.key.prefix",
+            "test_s3_key_prefix",
+            "test/s3/key/prefix/"
+    })
+    public void testS3keyPrefix(String s3KeyPrefix) {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        extendedClientConfiguration.withS3KeyPrefix(s3KeyPrefix);
+
+        assertEquals(s3KeyPrefix, extendedClientConfiguration.getS3KeyPrefix());
+    }
+
+    @Test
+    public void testTrimS3keyPrefix() {
+        String s3KeyPrefix = "test-s3-key-prefix";
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        extendedClientConfiguration.withS3KeyPrefix(String.format("   %s  ", s3KeyPrefix));
+
+        assertEquals(s3KeyPrefix, extendedClientConfiguration.getS3KeyPrefix());
+    }
+
+    @Test
+    public void testSetS3keyPrefixWithNullValue() {
+        String s3KeyPrefix = "test-s3-key-prefix";
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        extendedClientConfiguration.withS3KeyPrefix(null);
+
+        assertEquals("", extendedClientConfiguration.getS3KeyPrefix());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ".test-s3-key-prefix",
+            "./test-s3-key-prefix",
+            "../test-s3-key-prefix",
+            "/test-s3-key-prefix",
+            "test..s3..key..prefix",
+            "test-s3-key-prefix@",
+            "test s3 key prefix"
+    })
+    public void testS3KeyPrefixWithInvalidCharacters(String s3KeyPrefix) {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        assertThrows(AmazonClientException.class, () -> extendedClientConfiguration.withS3KeyPrefix(s3KeyPrefix));
+    }
+
+    @Test
+    public void testS3keyPrefixWithALargeString() {
+        int maxS3KeyLength = 1024;
+        int uuidLength = 36;
+        int maxS3KeyPrefixLength = maxS3KeyLength - uuidLength;
+        String s3KeyPrefix = generateStringWithLength(maxS3KeyPrefixLength + 1);
+
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+
+        assertThrows(AmazonClientException.class, () -> extendedClientConfiguration.withS3KeyPrefix(s3KeyPrefix));
     }
 }

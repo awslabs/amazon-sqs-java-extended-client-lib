@@ -15,6 +15,8 @@
 
 package com.amazon.sqs.javamessaging;
 
+import static com.amazon.sqs.javamessaging.StringTestUtil.generateStringWithLength;
+
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -35,13 +37,14 @@ import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.util.StringInputStream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,10 +58,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -76,11 +81,16 @@ public class AmazonSQSExtendedClientTest {
     private AmazonSQS extendedSqsWithDefaultKMS;
     private AmazonSQS extendedSqsWithGenericReservedAttributeName;
     private AmazonSQS extendedSqsWithDeprecatedMethods;
+    private AmazonSQS extendedSqsWithS3KeyPrefix;
     private AmazonSQS mockSqsBackend;
     private AmazonS3 mockS3;
+    private MockedStatic<UUID> uuidMockStatic;
+
     private static final String S3_BUCKET_NAME = "test-bucket-name";
     private static final String SQS_QUEUE_URL = "test-queue-url";
     private static final String S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID = "test-customer-managed-kms-key-id";
+    private static final String S3_KEY_PREFIX = "test-s3-key-prefix";
+    private static final String S3_KEY_UUID = "test-s3-key-uuid";
 
     private static final int LESS_THAN_SQS_SIZE_LIMIT = 3;
     private static final int SQS_SIZE_LIMIT = 262144;
@@ -91,6 +101,7 @@ public class AmazonSQSExtendedClientTest {
 
     @BeforeEach
     public void setupClients() {
+        uuidMockStatic = mockStatic(UUID.class);
         mockS3 = mock(AmazonS3.class);
         mockSqsBackend = mock(AmazonSQS.class);
         when(mockS3.putObject(isA(PutObjectRequest.class))).thenReturn(null);
@@ -111,11 +122,25 @@ public class AmazonSQSExtendedClientTest {
 
         ExtendedClientConfiguration extendedClientConfigurationDeprecated = new ExtendedClientConfiguration().withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
 
+        ExtendedClientConfiguration extendedClientConfigurationWithS3KeyPrefix = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withS3KeyPrefix(S3_KEY_PREFIX);
+
+        UUID uuidMock = mock(UUID.class);
+        when(uuidMock.toString()).thenReturn(S3_KEY_UUID);
+        uuidMockStatic.when(UUID::randomUUID).thenReturn(uuidMock);
+
         extendedSqsWithDefaultConfig = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
         extendedSqsWithCustomKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithCustomKMS));
         extendedSqsWithDefaultKMS = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithDefaultKMS));
         extendedSqsWithGenericReservedAttributeName = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithGenericReservedAttributeName));
         extendedSqsWithDeprecatedMethods = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationDeprecated));
+        extendedSqsWithS3KeyPrefix = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfigurationWithS3KeyPrefix));
+    }
+
+    @AfterEach
+    public void tearDown() {
+        uuidMockStatic.close();
     }
 
     @Test
@@ -571,6 +596,30 @@ public class AmazonSQSExtendedClientTest {
         assertEquals(expected, captor.getValue().getCannedAcl());
     }
 
+    @Test
+    public void testWhenSendLargeMessageWithS3PrefixKeyDefined() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+
+        extendedSqsWithS3KeyPrefix.sendMessage(messageRequest);
+
+        verify(mockS3, times(1)).putObject(
+                argThat((PutObjectRequest obj) -> obj.getKey().equals(S3_KEY_PREFIX + S3_KEY_UUID)));
+    }
+
+    @Test
+    public void testWhenSendLargeMessageWithUndefinedS3PrefixKey() {
+        String messageBody = generateStringWithLength(MORE_THAN_SQS_SIZE_LIMIT);
+
+        SendMessageRequest messageRequest = new SendMessageRequest(SQS_QUEUE_URL, messageBody);
+
+        extendedSqsWithDefaultConfig.sendMessage(messageRequest);
+
+        verify(mockS3, times(1)).putObject(
+                argThat((PutObjectRequest obj) -> obj.getKey().equals(S3_KEY_UUID)));
+    }
+
     private void testReceiveMessage_when_MessageIsLarge(String reservedAttributeName) throws Exception {
         Message message = new Message().addMessageAttributesEntry(reservedAttributeName, mock(MessageAttributeValue.class));
         String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson();
@@ -607,11 +656,4 @@ public class AmazonSQSExtendedClientTest {
     private String getSampleLargeReceiptHandle() {
         return getLargeReceiptHandle(UUID.randomUUID().toString(), UUID.randomUUID().toString());
     }
-
-    private String generateStringWithLength(int messageLength) {
-        char[] charArray = new char[messageLength];
-        Arrays.fill(charArray, 'x');
-        return new String(charArray);
-    }
-
 }

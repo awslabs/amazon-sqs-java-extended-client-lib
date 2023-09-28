@@ -15,11 +15,17 @@
 
 package com.amazon.sqs.javamessaging;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.annotation.NotThreadSafe;
+import com.amazonaws.util.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import software.amazon.payloadoffloading.PayloadStorageConfiguration;
+
+import java.util.regex.Pattern;
 
 
 /**
@@ -28,10 +34,17 @@ import software.amazon.payloadoffloading.PayloadStorageConfiguration;
  */
 @NotThreadSafe
 public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
+    private static final Log LOG = LogFactory.getLog(ExtendedClientConfiguration.class);
+
+    private static final int UUID_LENGTH = 36;
+    private static final int MAX_S3_KEY_LENGTH = 1024;
+    private static final int MAX_S3_KEY_PREFIX_LENGTH = MAX_S3_KEY_LENGTH - UUID_LENGTH;
+    private static final Pattern INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN = Pattern.compile("[^a-zA-Z0-9./_-]");
 
     private boolean cleanupS3Payload = true;
     private boolean useLegacyReservedAttributeName = true;
     private boolean ignorePayloadNotFound = false;
+    private String s3KeyPrefix = "";
 
     public ExtendedClientConfiguration() {
         super();
@@ -43,6 +56,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         this.cleanupS3Payload = other.doesCleanupS3Payload();
         this.useLegacyReservedAttributeName = other.usesLegacyReservedAttributeName();
         this.ignorePayloadNotFound = other.ignoresPayloadNotFound();
+        this.s3KeyPrefix = other.getS3KeyPrefix();
     }
 
     /**
@@ -158,6 +172,68 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      */
     public boolean ignoresPayloadNotFound() {
         return ignorePayloadNotFound;
+    }
+
+    /**
+     * Sets a string that will be used as prefix of the S3 Key.
+     *
+     * @param s3KeyPrefix
+     *         A S3 key prefix value
+     */
+    public void setS3KeyPrefix(String s3KeyPrefix) {
+        String trimmedPrefix = StringUtils.trim(s3KeyPrefix);
+
+        if (trimmedPrefix == null) {
+            this.s3KeyPrefix = "";
+            return;
+        }
+
+        if (trimmedPrefix.length() > MAX_S3_KEY_PREFIX_LENGTH) {
+            String errorMessage = "The S3 key prefix length must not be greater than " + MAX_S3_KEY_PREFIX_LENGTH;
+            LOG.error(errorMessage);
+            throw new AmazonClientException(errorMessage);
+        }
+
+        if (trimmedPrefix.startsWith(".") || trimmedPrefix.startsWith("/")) {
+            String errorMessage = "The S3 key prefix must not starts with '.' or '/'";
+            LOG.error(errorMessage);
+            throw new AmazonClientException(errorMessage);
+        }
+
+        if (trimmedPrefix.contains("..")) {
+            String errorMessage = "The S3 key prefix must not contains the string '..'";
+            LOG.error(errorMessage);
+            throw new AmazonClientException(errorMessage);
+        }
+
+        if (INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN.matcher(trimmedPrefix).find()) {
+            String errorMessage = "The S3 key prefix contain invalid characters. The allowed characters are: letters, digits, '/', '_', '-', and '.'";
+            LOG.error(errorMessage);
+            throw new AmazonClientException(errorMessage);
+        }
+
+        this.s3KeyPrefix = trimmedPrefix;
+    }
+
+    /**
+     * Sets a string that will be used as prefix of the S3 Key.
+     *
+     * @param s3KeyPrefix
+     *         A S3 key prefix value
+     *
+     * @return the updated ExtendedClientConfiguration object.
+     */
+    public ExtendedClientConfiguration withS3KeyPrefix(String s3KeyPrefix) {
+        setS3KeyPrefix(s3KeyPrefix);
+        return this;
+    }
+
+    /**
+     * Gets the S3 key prefix
+     * @return the prefix value which is being used for compose the S3 key.
+     */
+    public String getS3KeyPrefix() {
+        return this.s3KeyPrefix;
     }
 
     @Override

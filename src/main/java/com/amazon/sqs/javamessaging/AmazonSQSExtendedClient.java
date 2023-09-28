@@ -49,6 +49,7 @@ import com.amazonaws.services.sqs.model.SendMessageBatchResult;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.TooManyEntriesInBatchRequestException;
+import com.amazonaws.util.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
@@ -64,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.UUID;
 
 
 /**
@@ -1263,8 +1265,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
-                messageContentSize);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr, messageContentSize);
         batchEntry.setMessageBody(largeMessagePointer);
 
         return batchEntry;
@@ -1291,11 +1292,17 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr,
-                messageContentSize);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr, messageContentSize);
         sendMessageRequest.setMessageBody(largeMessagePointer);
 
         return sendMessageRequest;
     }
 
+    private String storeOriginalPayload(String messageContentStr, Long messageContentSize) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isNullOrEmpty(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr, messageContentSize);
+        }
+        return payloadStore.storeOriginalPayload(messageContentStr, messageContentSize, s3KeyPrefix + UUID.randomUUID());
+    }
 }
