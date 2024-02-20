@@ -365,7 +365,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.getMessageAttributes());
             if (largePayloadAttributeName.isPresent()) {
                 String largeMessagePointer = message.getBody();
-                largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
+                largeMessagePointer = largeMessagePointer.replaceFirst("com\\.(amazon|amazonaws)\\.(sqs|services)\\.(javamessaging|extendedmessaging).MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
 
                 final String originalBody;
                 try {
