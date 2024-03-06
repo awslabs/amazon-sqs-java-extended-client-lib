@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.awscore.AwsRequest;
@@ -851,7 +853,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         batchEntryBuilder.messageBody(largeMessagePointer);
 
         return batchEntryBuilder.build();
@@ -871,13 +873,29 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         sendMessageRequestBuilder.messageBody(largeMessagePointer);
 
         return sendMessageRequestBuilder.build();
     }
 
+    private String storeOriginalPayload(String messageContentStr) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isBlank(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr);
+        }
+        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
+    }
+
+    @SuppressWarnings("unchecked")
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
         return AmazonSQSExtendedClientUtil.appendUserAgent(builder, USER_AGENT_NAME, USER_AGENT_VERSION);
     }
+
+	@Override
+	public void close() {
+		super.close();
+		this.clientConfiguration.getS3Client().close();
+	}    
+    
 }

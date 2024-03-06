@@ -15,6 +15,7 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.utils.StringUtils;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 import software.amazon.payloadoffloading.Util;
 
@@ -164,5 +165,36 @@ public class AmazonSQSExtendedClientUtil {
             }
         }
         return totalMsgAttributesSize;
+    }
+
+    public static String trimAndValidateS3KeyPrefix(String s3KeyPrefix) {
+        String trimmedPrefix = StringUtils.trimToEmpty(s3KeyPrefix);
+
+        if (trimmedPrefix.length() > SQSExtendedClientConstants.MAX_S3_KEY_PREFIX_LENGTH) {
+            String errorMessage = "The S3 key prefix length must not be greater than "
+                                  + SQSExtendedClientConstants.MAX_S3_KEY_PREFIX_LENGTH;
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        if (trimmedPrefix.startsWith(".") || trimmedPrefix.startsWith("/")) {
+            String errorMessage = "The S3 key prefix must not starts with '.' or '/'";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        if (trimmedPrefix.contains("..")) {
+            String errorMessage = "The S3 key prefix must not contains the string '..'";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        if (SQSExtendedClientConstants.INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN.matcher(trimmedPrefix).find()) {
+            String errorMessage = "The S3 key prefix contain invalid characters. The allowed characters are: letters, digits, '/', '_', '-', and '.'";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        return trimmedPrefix;
     }
 }

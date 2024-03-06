@@ -2,8 +2,11 @@ package com.amazon.sqs.javamessaging;
 
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedAsyncClient.USER_AGENT_NAME;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedAsyncClient.USER_AGENT_VERSION;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
@@ -24,9 +27,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ApiName;
@@ -81,7 +83,7 @@ public class AmazonSQSExtendedAsyncClientTest {
     // should be > 1 and << SQS_SIZE_LIMIT
     private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
 
-    @Before
+    @BeforeEach
     public void setupClients() {
         mockS3 = mock(S3AsyncClient.class);
         mockSqsBackend = mock(SqsAsyncClient.class);
@@ -213,7 +215,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         ArgumentCaptor<AsyncRequestBody> requestBodyArgumentCaptor = ArgumentCaptor.forClass(AsyncRequestBody.class);
         verify(mockS3, times(1)).putObject(putObjectRequestArgumentCaptor.capture(), requestBodyArgumentCaptor.capture());
 
-        Assert.assertNull(putObjectRequestArgumentCaptor.getValue().serverSideEncryption());
+        assertNull(putObjectRequestArgumentCaptor.getValue().serverSideEncryption());
         assertEquals(putObjectRequestArgumentCaptor.getValue().bucket(), S3_BUCKET_NAME);
     }
 
@@ -243,8 +245,8 @@ public class AmazonSQSExtendedAsyncClientTest {
         ArgumentCaptor<AsyncRequestBody> requestBodyArgumentCaptor = ArgumentCaptor.forClass(AsyncRequestBody.class);
         verify(mockS3, times(1)).putObject(putObjectRequestArgumentCaptor.capture(), requestBodyArgumentCaptor.capture());
 
-        Assert.assertTrue(putObjectRequestArgumentCaptor.getValue().serverSideEncryption() != null &&
-                          putObjectRequestArgumentCaptor.getValue().ssekmsKeyId() == null);
+        assertTrue(putObjectRequestArgumentCaptor.getValue().serverSideEncryption() != null &&
+                   putObjectRequestArgumentCaptor.getValue().ssekmsKeyId() == null);
         assertEquals(putObjectRequestArgumentCaptor.getValue().bucket(), S3_BUCKET_NAME);
     }
 
@@ -258,8 +260,8 @@ public class AmazonSQSExtendedAsyncClientTest {
         verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
 
         Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().messageAttributes();
-        Assert.assertTrue(attributes.containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
-        Assert.assertFalse(attributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME));
+        assertTrue(attributes.containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertFalse(attributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME));
 
     }
 
@@ -273,8 +275,8 @@ public class AmazonSQSExtendedAsyncClientTest {
         verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
 
         Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().messageAttributes();
-        Assert.assertTrue(attributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME));
-        Assert.assertFalse(attributes.containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertTrue(attributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME));
+        assertFalse(attributes.containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
     }
 
     @Test
@@ -383,8 +385,8 @@ public class AmazonSQSExtendedAsyncClientTest {
         Message actualMessage = actualReceiveMessageResponse.messages().get(0);
 
         assertEquals(expectedMessage, actualMessage.body());
-        Assert.assertTrue(actualMessage.messageAttributes().containsKey(expectedMessageAttributeName));
-        Assert.assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
+        assertTrue(actualMessage.messageAttributes().containsKey(expectedMessageAttributeName));
+        assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
         verifyNoInteractions(mockS3);
     }
 
@@ -464,7 +466,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         verify(mockSqsBackend).sendMessage(sendMessageRequestCaptor.capture());
 
         Map<String, MessageAttributeValue> attributes = sendMessageRequestCaptor.getValue().messageAttributes();
-        Assert.assertTrue(attributes.isEmpty());
+        assertTrue(attributes.isEmpty());
     }
 
     @Test
@@ -634,7 +636,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         Message actualMessage = actualReceiveMessageResponse.messages().get(0);
 
         assertEquals(expectedMessage, actualMessage.body());
-        Assert.assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
+        assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
         verify(mockS3, times(1)).getObject(isA(GetObjectRequest.class), isA(AsyncResponseTransformer.class));
     }
 

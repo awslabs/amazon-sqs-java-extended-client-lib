@@ -1,9 +1,13 @@
 package com.amazon.sqs.javamessaging;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.payloadoffloading.ServerSideEncryptionFactory;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
@@ -13,9 +17,10 @@ import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
  */
 public class ExtendedAsyncClientConfigurationTest {
 
-    private static String s3BucketName = "test-bucket-name";
-    private static String s3ServerSideEncryptionKMSKeyId = "test-customer-managed-kms-key-id";
-    private static ServerSideEncryptionStrategy serverSideEncryptionStrategy = ServerSideEncryptionFactory.customerKey(s3ServerSideEncryptionKMSKeyId);
+    private static final String s3BucketName = "test-bucket-name";
+    private static final String s3ServerSideEncryptionKMSKeyId = "test-customer-managed-kms-key-id";
+    private static final ServerSideEncryptionStrategy serverSideEncryptionStrategy =
+        ServerSideEncryptionFactory.customerKey(s3ServerSideEncryptionKMSKeyId);
 
     @Test
     public void testCopyConstructor() {
@@ -33,15 +38,15 @@ public class ExtendedAsyncClientConfigurationTest {
 
         ExtendedAsyncClientConfiguration newExtendedClientConfig = new ExtendedAsyncClientConfiguration(extendedClientConfig);
 
-        Assert.assertEquals(s3, newExtendedClientConfig.getS3AsyncClient());
-        Assert.assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
-        Assert.assertEquals(serverSideEncryptionStrategy, newExtendedClientConfig.getServerSideEncryptionStrategy());
-        Assert.assertTrue(newExtendedClientConfig.isPayloadSupportEnabled());
-        Assert.assertEquals(doesCleanupS3Payload, newExtendedClientConfig.doesCleanupS3Payload());
-        Assert.assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
-        Assert.assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
+        assertEquals(s3, newExtendedClientConfig.getS3AsyncClient());
+        assertEquals(s3BucketName, newExtendedClientConfig.getS3BucketName());
+        assertEquals(serverSideEncryptionStrategy, newExtendedClientConfig.getServerSideEncryptionStrategy());
+        assertTrue(newExtendedClientConfig.isPayloadSupportEnabled());
+        assertEquals(doesCleanupS3Payload, newExtendedClientConfig.doesCleanupS3Payload());
+        assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
+        assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
 
-        Assert.assertNotSame(newExtendedClientConfig, extendedClientConfig);
+        assertNotSame(newExtendedClientConfig, extendedClientConfig);
     }
 
     @Test
@@ -50,10 +55,10 @@ public class ExtendedAsyncClientConfigurationTest {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3AsyncClient());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3AsyncClient());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
 
     }
 
@@ -63,10 +68,10 @@ public class ExtendedAsyncClientConfigurationTest {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName, true);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3AsyncClient());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertTrue(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3AsyncClient());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
 
     @Test
@@ -75,9 +80,9 @@ public class ExtendedAsyncClientConfigurationTest {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
         extendedClientConfiguration.setPayloadSupportEnabled(s3, s3BucketName, false);
 
-        Assert.assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
-        Assert.assertFalse(extendedClientConfiguration.doesCleanupS3Payload());
-        Assert.assertNotNull(extendedClientConfiguration.getS3AsyncClient());
-        Assert.assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
+        assertTrue(extendedClientConfiguration.isPayloadSupportEnabled());
+        assertFalse(extendedClientConfiguration.doesCleanupS3Payload());
+        assertNotNull(extendedClientConfiguration.getS3AsyncClient());
+        assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
 }

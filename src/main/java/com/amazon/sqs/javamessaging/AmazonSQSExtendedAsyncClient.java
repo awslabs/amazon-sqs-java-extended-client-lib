@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.apache.commons.logging.Log;
@@ -469,7 +470,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        return payloadStore.storeOriginalPayload(messageContentStr)
+        return storeOriginalPayload(messageContentStr)
             .thenApply(largeMessagePointer -> {
                 batchEntryBuilder.messageBody(largeMessagePointer);
                 return batchEntryBuilder.build();
@@ -494,6 +495,14 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 sendMessageRequestBuilder.messageBody(largeMessagePointer);
                 return sendMessageRequestBuilder.build();
             });
+    }
+
+    private CompletableFuture<String> storeOriginalPayload(String messageContentStr) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isBlank(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr);
+        }
+        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
     }
 
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
