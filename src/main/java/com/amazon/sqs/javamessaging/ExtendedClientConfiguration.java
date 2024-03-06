@@ -18,14 +18,10 @@ package com.amazon.sqs.javamessaging;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.annotations.NotThreadSafe;
-import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
-import software.amazon.awssdk.utils.StringUtils;
 import software.amazon.payloadoffloading.PayloadStorageConfiguration;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
-
-import java.util.regex.Pattern;
 
 
 /**
@@ -35,11 +31,6 @@ import java.util.regex.Pattern;
 @NotThreadSafe
 public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     private static final Log LOG = LogFactory.getLog(ExtendedClientConfiguration.class);
-
-    private static final int UUID_LENGTH = 36;
-    private static final int MAX_S3_KEY_LENGTH = 1024;
-    private static final int MAX_S3_KEY_PREFIX_LENGTH = MAX_S3_KEY_LENGTH - UUID_LENGTH;
-    private static final Pattern INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN = Pattern.compile("[^a-zA-Z0-9./_-]");
 
     private boolean cleanupS3Payload = true;
     private boolean useLegacyReservedAttributeName = true;
@@ -149,33 +140,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      *         A S3 key prefix value
      */
     public void setS3KeyPrefix(String s3KeyPrefix) {
-        String trimmedPrefix = StringUtils.trimToEmpty(s3KeyPrefix);
-
-        if (trimmedPrefix.length() > MAX_S3_KEY_PREFIX_LENGTH) {
-            String errorMessage = "The S3 key prefix length must not be greater than " + MAX_S3_KEY_PREFIX_LENGTH;
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-
-        if (trimmedPrefix.startsWith(".") || trimmedPrefix.startsWith("/")) {
-            String errorMessage = "The S3 key prefix must not starts with '.' or '/'";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-
-        if (trimmedPrefix.contains("..")) {
-            String errorMessage = "The S3 key prefix must not contains the string '..'";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-
-        if (INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN.matcher(trimmedPrefix).find()) {
-            String errorMessage = "The S3 key prefix contain invalid characters. The allowed characters are: letters, digits, '/', '_', '-', and '.'";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-
-        this.s3KeyPrefix = trimmedPrefix;
+        this.s3KeyPrefix = AmazonSQSExtendedClientUtil.trimAndValidateS3KeyPrefix(s3KeyPrefix);
     }
 
     /**
