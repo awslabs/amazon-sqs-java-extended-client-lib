@@ -298,10 +298,8 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
 
         // Delete from SQS first, then S3.
         final String messageToDeletePointer = messagePointer;
-        return super.deleteMessage(deleteMessageRequestBuilder.build())
-            .thenCompose(deleteMessageResponse ->
-                payloadStore.deleteOriginalPayload(messageToDeletePointer)
-                    .thenApply(v -> deleteMessageResponse));
+        return payloadStore.deleteOriginalPayload(messageToDeletePointer)
+            .thenCompose(ignore -> super.deleteMessage(deleteMessageRequestBuilder.build()));
     }
 
     /**
@@ -395,6 +393,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         }
 
         List<DeleteMessageBatchRequestEntry> entries = new ArrayList<>(deleteMessageBatchRequest.entries().size());
+        List<String> s3ToCleanup = new ArrayList<>(deleteMessageBatchRequest.entries().size());
         for (DeleteMessageBatchRequestEntry entry : deleteMessageBatchRequest.entries()) {
             DeleteMessageBatchRequestEntry.Builder entryBuilder = entry.toBuilder();
             String receiptHandle = entry.receiptHandle();
@@ -406,7 +405,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 // Delete s3 payload if needed
                 if (clientConfiguration.doesCleanupS3Payload()) {
                     String messagePointer = getMessagePointerFromModifiedReceiptHandle(receiptHandle);
-                    payloadStore.deleteOriginalPayload(messagePointer);
+                    s3ToCleanup.add(messagePointer);
                 }
             }
 
@@ -415,7 +414,16 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         }
 
         deleteMessageBatchRequestBuilder.entries(entries);
-        return super.deleteMessageBatch(deleteMessageBatchRequestBuilder.build());
+
+        // Check if message is in S3 or only in SQS.
+        if (s3ToCleanup.isEmpty()) {
+            // Delete only from SQS
+            return super.deleteMessageBatch(deleteMessageBatchRequestBuilder.build());
+        }
+
+        // Delete from S3 first, then SQS.
+        return payloadStore.deleteOriginalPayloads(s3ToCleanup)
+            .thenCompose(ignore -> super.deleteMessageBatch(deleteMessageBatchRequestBuilder.build()));
     }
 
     /**

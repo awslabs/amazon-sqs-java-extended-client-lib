@@ -38,6 +38,8 @@ import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
@@ -91,6 +93,8 @@ public class AmazonSQSExtendedAsyncClientTest {
             CompletableFuture.completedFuture(null));
         when(mockS3.deleteObject(isA(DeleteObjectRequest.class))).thenReturn(
             CompletableFuture.completedFuture(DeleteObjectResponse.builder().build()));
+        when(mockS3.deleteObjects(isA(DeleteObjectsRequest.class))).thenReturn(
+            CompletableFuture.completedFuture(DeleteObjectsResponse.builder().build()));
         when(mockSqsBackend.sendMessage(isA(SendMessageRequest.class))).thenReturn(
             CompletableFuture.completedFuture(SendMessageResponse.builder().build()));
         when(mockSqsBackend.sendMessageBatch(isA(SendMessageBatchRequest.class))).thenReturn(
@@ -590,7 +594,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         IntStream.range(0, originalReceiptHandles.size()).forEach(i -> assertEquals(
             originalReceiptHandles.get(i),
             request.entries().get(i).receiptHandle()));
-        verify(mockS3, times(batchSize)).deleteObject(any(DeleteObjectRequest.class));
+        verify(mockS3, times(1)).deleteObjects(any(DeleteObjectsRequest.class));
     }
 
     @Test
