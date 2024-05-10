@@ -490,7 +490,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        return payloadStore.storeOriginalPayload(messageContentStr)
+        return storeOriginalPayload(messageContentStr)
             .thenApply(largeMessagePointer -> {
                 sendMessageRequestBuilder.messageBody(largeMessagePointer);
                 return sendMessageRequestBuilder.build();
