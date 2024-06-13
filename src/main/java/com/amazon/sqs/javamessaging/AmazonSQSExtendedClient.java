@@ -643,7 +643,9 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             }
             Integer entryIndex = pair.left();
             Long originalEntrySize = pair.right();
-            SendMessageBatchRequestEntry alteredEntry = storeMessageInS3(originalEntries.get(entryIndex));
+            SendMessageBatchRequestEntry originalEntry = originalEntries.get(entryIndex);
+            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), originalEntry.messageAttributes());
+            SendMessageBatchRequestEntry alteredEntry = storeMessageInS3(originalEntry);
             totalSize = totalSize - originalEntrySize + sizeOf(alteredEntry);
             alteredEntries.set(entryIndex, alteredEntry);
             hasS3Entries = true;
