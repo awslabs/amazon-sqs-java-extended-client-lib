@@ -22,14 +22,18 @@ import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getOrigRe
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getReservedAttributeNameIfPresent;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.sizeOf;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -73,6 +77,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
+import software.amazon.awssdk.utils.Pair;
 import software.amazon.awssdk.utils.StringUtils;
 import software.amazon.payloadoffloading.PayloadStore;
 import software.amazon.payloadoffloading.S3BackedPayloadStore;
@@ -616,23 +621,36 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             return super.sendMessageBatch(sendMessageBatchRequest);
         }
 
-        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>(sendMessageBatchRequest.entries().size());
+        List<SendMessageBatchRequestEntry> originalEntries = sendMessageBatchRequest.entries();
+        ArrayList<SendMessageBatchRequestEntry> alteredEntries = new ArrayList<>(originalEntries.size());
+        alteredEntries.addAll(originalEntries);
 
+        // Batch entry sizes order by size
+        List<Pair<Integer, Long>> entrySizes = IntStream.range(0, originalEntries.size())
+                .boxed()
+                .map(i -> Pair.of(i, sizeOf(originalEntries.get(i))))
+                .sorted((p1, p2) -> Long.compare(p2.right(), p1.right()))
+                .collect(Collectors.toList());
+
+        long totalSize = entrySizes.stream().map(Pair::right).mapToLong(Long::longValue).sum();
+
+        // Move messages to s3 starting from the largest until total size is under the threshold if needed
         boolean hasS3Entries = false;
-        for (SendMessageBatchRequestEntry entry : sendMessageBatchRequest.entries()) {
-            //Check message attributes for ExtendedClient related constraints
-            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), entry.messageAttributes());
-
-            if (clientConfiguration.isAlwaysThroughS3()
-                || isLarge(clientConfiguration.getPayloadSizeThreshold(), entry)) {
-                entry = storeMessageInS3(entry);
-                hasS3Entries = true;
+        for (Pair<Integer, Long> pair : entrySizes) {
+            // Verify that total size of batch request is within limits
+            if (totalSize <= clientConfiguration.getPayloadSizeThreshold() && !clientConfiguration.isAlwaysThroughS3()) {
+                break;
             }
-            batchEntries.add(entry);
+            Integer entryIndex = pair.left();
+            Long originalEntrySize = pair.right();
+            SendMessageBatchRequestEntry alteredEntry = storeMessageInS3(originalEntries.get(entryIndex));
+            totalSize = totalSize - originalEntrySize + sizeOf(alteredEntry);
+            alteredEntries.set(entryIndex, alteredEntry);
+            hasS3Entries = true;
         }
 
         if (hasS3Entries) {
-            sendMessageBatchRequest = sendMessageBatchRequest.toBuilder().entries(batchEntries).build();
+            sendMessageBatchRequest = sendMessageBatchRequest.toBuilder().entries(alteredEntries).build();
         }
 
         return super.sendMessageBatch(sendMessageBatchRequest);
@@ -896,6 +914,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 	public void close() {
 		super.close();
 		this.clientConfiguration.getS3Client().close();
-	}    
-    
+	}
+
 }
