@@ -101,10 +101,14 @@ public class AmazonSQSExtendedClientUtil {
         return (totalMsgSize > payloadSizeThreshold);
     }
 
+    public static long sizeOf(SendMessageBatchRequestEntry batchRequestEntry) {
+        int msgAttributesSize = getMsgAttributesSize(batchRequestEntry.messageAttributes());
+        long msgBodySize = Util.getStringSizeInBytes(batchRequestEntry.messageBody());
+        return msgAttributesSize + msgBodySize;
+    }
+
     public static boolean isLarge(int payloadSizeThreshold, SendMessageBatchRequestEntry batchEntry) {
-        int msgAttributesSize = getMsgAttributesSize(batchEntry.messageAttributes());
-        long msgBodySize = Util.getStringSizeInBytes(batchEntry.messageBody());
-        long totalMsgSize = msgAttributesSize + msgBodySize;
+        long totalMsgSize = sizeOf(batchEntry);
         return (totalMsgSize > payloadSizeThreshold);
     }
 
