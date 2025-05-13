@@ -15,6 +15,8 @@
 
 package com.amazon.sqs.javamessaging;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.annotations.NotThreadSafe;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
@@ -28,10 +30,12 @@ import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
  */
 @NotThreadSafe
 public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
+    private static final Log LOG = LogFactory.getLog(ExtendedClientConfiguration.class);
 
     private boolean cleanupS3Payload = true;
     private boolean useLegacyReservedAttributeName = true;
     private boolean ignorePayloadNotFound = false;
+    private String s3KeyPrefix = "";
 
     public ExtendedClientConfiguration() {
         super();
@@ -43,6 +47,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         this.cleanupS3Payload = other.doesCleanupS3Payload();
         this.useLegacyReservedAttributeName = other.usesLegacyReservedAttributeName();
         this.ignorePayloadNotFound = other.ignoresPayloadNotFound();
+        this.s3KeyPrefix = other.s3KeyPrefix;
     }
 
     /**
@@ -126,6 +131,37 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     public ExtendedClientConfiguration withIgnorePayloadNotFound(boolean ignorePayloadNotFound) {
         setIgnorePayloadNotFound(ignorePayloadNotFound);
         return this;
+    }
+
+    /**
+     * Sets a string that will be used as prefix of the S3 Key.
+     *
+     * @param s3KeyPrefix
+     *         A S3 key prefix value
+     */
+    public void setS3KeyPrefix(String s3KeyPrefix) {
+        this.s3KeyPrefix = AmazonSQSExtendedClientUtil.trimAndValidateS3KeyPrefix(s3KeyPrefix);
+    }
+
+    /**
+     * Sets a string that will be used as prefix of the S3 Key.
+     *
+     * @param s3KeyPrefix
+     *         A S3 key prefix value
+     *
+     * @return the updated ExtendedClientConfiguration object.
+     */
+    public ExtendedClientConfiguration withS3KeyPrefix(String s3KeyPrefix) {
+        setS3KeyPrefix(s3KeyPrefix);
+        return this;
+    }
+
+    /**
+     * Gets the S3 key prefix
+     * @return the prefix value which is being used for compose the S3 key.
+     */
+    public String getS3KeyPrefix() {
+        return this.s3KeyPrefix;
     }
 
     /**

@@ -15,27 +15,31 @@
 
 package com.amazon.sqs.javamessaging;
 
-import java.lang.UnsupportedOperationException;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.checkMessageAttributes;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.embedS3PointerInReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getMessagePointerFromModifiedReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getOrigReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getReservedAttributeNameIfPresent;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
+
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.awscore.AwsRequest;
-import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.core.ApiName;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.util.VersionInfo;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.sqs.SqsClient;
-
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
 import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
@@ -71,7 +75,6 @@ import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
 import software.amazon.awssdk.utils.StringUtils;
-import software.amazon.payloadoffloading.PayloadS3Pointer;
 import software.amazon.payloadoffloading.PayloadStore;
 import software.amazon.payloadoffloading.S3BackedPayloadStore;
 import software.amazon.payloadoffloading.S3Dao;
@@ -102,9 +105,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     static final String USER_AGENT_VERSION = VersionInfo.SDK_VERSION;
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClient.class);
-    static final String LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
-    static final List<String> RESERVED_ATTRIBUTE_NAMES = Arrays.asList(LEGACY_RESERVED_ATTRIBUTE_NAME,
-            SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME);
     private ExtendedClientConfiguration clientConfiguration;
     private PayloadStore payloadStore;
 
@@ -205,9 +205,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         //Check message attributes for ExtendedClient related constraints
-        checkMessageAttributes(sendMessageRequest.messageAttributes());
+        checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest.messageAttributes());
 
-        if (clientConfiguration.isAlwaysThroughS3() || isLarge(sendMessageRequest)) {
+        if (clientConfiguration.isAlwaysThroughS3()
+            || isLarge(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest)) {
             sendMessageRequest = storeMessageInS3(sendMessageRequest);
         }
         return super.sendMessage(sendMessageRequest);
@@ -321,8 +322,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
         //Remove before adding to avoid any duplicates
         List<String> messageAttributeNames = new ArrayList<>(receiveMessageRequest.messageAttributeNames());
-        messageAttributeNames.removeAll(RESERVED_ATTRIBUTE_NAMES);
-        messageAttributeNames.addAll(RESERVED_ATTRIBUTE_NAMES);
+        messageAttributeNames.removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+        messageAttributeNames.addAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
         receiveMessageRequestBuilder.messageAttributeNames(messageAttributeNames);
         receiveMessageRequest = receiveMessageRequestBuilder.build();
 
@@ -358,7 +359,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 // remove the additional attribute before returning the message
                 // to user.
                 Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
-                messageAttributes.keySet().removeAll(RESERVED_ATTRIBUTE_NAMES);
+                messageAttributes.keySet().removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
                 messageBuilder.messageAttributes(messageAttributes);
 
                 // Embed s3 object pointer in the receipt handle.
@@ -634,9 +635,10 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         boolean hasS3Entries = false;
         for (SendMessageBatchRequestEntry entry : sendMessageBatchRequest.entries()) {
             //Check message attributes for ExtendedClient related constraints
-            checkMessageAttributes(entry.messageAttributes());
+            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), entry.messageAttributes());
 
-            if (clientConfiguration.isAlwaysThroughS3() || isLarge(entry)) {
+            if (clientConfiguration.isAlwaysThroughS3()
+                || isLarge(clientConfiguration.getPayloadSizeThreshold(), entry)) {
                 entry = storeMessageInS3(entry);
                 hasS3Entries = true;
             }
@@ -851,121 +853,6 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         return super.purgeQueue(purgeQueueRequestBuilder.build());
     }
 
-    private void checkMessageAttributes(Map<String, MessageAttributeValue> messageAttributes) {
-        int msgAttributesSize = getMsgAttributesSize(messageAttributes);
-        if (msgAttributesSize > clientConfiguration.getPayloadSizeThreshold()) {
-            String errorMessage = "Total size of Message attributes is " + msgAttributesSize
-                    + " bytes which is larger than the threshold of " + clientConfiguration.getPayloadSizeThreshold()
-                    + " Bytes. Consider including the payload in the message body instead of message attributes.";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-
-        int messageAttributesNum = messageAttributes.size();
-        if (messageAttributesNum > SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES) {
-            String errorMessage = "Number of message attributes [" + messageAttributesNum
-                    + "] exceeds the maximum allowed for large-payload messages ["
-                    + SQSExtendedClientConstants.MAX_ALLOWED_ATTRIBUTES + "].";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-        Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(messageAttributes);
-
-        if (largePayloadAttributeName.isPresent()) {
-            String errorMessage = "Message attribute name " + largePayloadAttributeName.get()
-                    + " is reserved for use by SQS extended client.";
-            LOG.error(errorMessage);
-            throw SdkClientException.create(errorMessage);
-        }
-    }
-
-    /**
-     * TODO: Wrap the message pointer as-is to the receiptHandle so that it can be generic
-     * and does not use any LargeMessageStore implementation specific details.
-     */
-    private String embedS3PointerInReceiptHandle(String receiptHandle, String pointer) {
-        PayloadS3Pointer s3Pointer = PayloadS3Pointer.fromJson(pointer);
-        String s3MsgBucketName = s3Pointer.getS3BucketName();
-        String s3MsgKey = s3Pointer.getS3Key();
-
-        String modifiedReceiptHandle = SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + s3MsgBucketName
-                + SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER + SQSExtendedClientConstants.S3_KEY_MARKER
-                + s3MsgKey + SQSExtendedClientConstants.S3_KEY_MARKER + receiptHandle;
-        return modifiedReceiptHandle;
-    }
-
-    private String getOrigReceiptHandle(String receiptHandle) {
-        int secondOccurence = receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER,
-                receiptHandle.indexOf(SQSExtendedClientConstants.S3_KEY_MARKER) + 1);
-        return receiptHandle.substring(secondOccurence + SQSExtendedClientConstants.S3_KEY_MARKER.length());
-    }
-
-    private String getFromReceiptHandleByMarker(String receiptHandle, String marker) {
-        int firstOccurence = receiptHandle.indexOf(marker);
-        int secondOccurence = receiptHandle.indexOf(marker, firstOccurence + 1);
-        return receiptHandle.substring(firstOccurence + marker.length(), secondOccurence);
-    }
-
-    private boolean isS3ReceiptHandle(String receiptHandle) {
-        return receiptHandle.contains(SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER)
-                && receiptHandle.contains(SQSExtendedClientConstants.S3_KEY_MARKER);
-    }
-
-    private String getMessagePointerFromModifiedReceiptHandle(String receiptHandle) {
-        String s3MsgBucketName = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_BUCKET_NAME_MARKER);
-        String s3MsgKey = getFromReceiptHandleByMarker(receiptHandle, SQSExtendedClientConstants.S3_KEY_MARKER);
-
-        PayloadS3Pointer payloadS3Pointer = new PayloadS3Pointer(s3MsgBucketName, s3MsgKey);
-        return payloadS3Pointer.toJson();
-    }
-
-    private boolean isLarge(SendMessageRequest sendMessageRequest) {
-        int msgAttributesSize = getMsgAttributesSize(sendMessageRequest.messageAttributes());
-        long msgBodySize = Util.getStringSizeInBytes(sendMessageRequest.messageBody());
-        long totalMsgSize = msgAttributesSize + msgBodySize;
-        return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
-    }
-
-    private boolean isLarge(SendMessageBatchRequestEntry batchEntry) {
-        int msgAttributesSize = getMsgAttributesSize(batchEntry.messageAttributes());
-        long msgBodySize = Util.getStringSizeInBytes(batchEntry.messageBody());
-        long totalMsgSize = msgAttributesSize + msgBodySize;
-        return (totalMsgSize > clientConfiguration.getPayloadSizeThreshold());
-    }
-
-    private Optional<String> getReservedAttributeNameIfPresent(Map<String, MessageAttributeValue> msgAttributes) {
-        String reservedAttributeName = null;
-        if (msgAttributes.containsKey(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME)) {
-            reservedAttributeName = SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME;
-        } else if (msgAttributes.containsKey(LEGACY_RESERVED_ATTRIBUTE_NAME)) {
-            reservedAttributeName = LEGACY_RESERVED_ATTRIBUTE_NAME;
-        }
-        return Optional.ofNullable(reservedAttributeName);
-    }
-
-    private int getMsgAttributesSize(Map<String, MessageAttributeValue> msgAttributes) {
-        int totalMsgAttributesSize = 0;
-        for (Map.Entry<String, MessageAttributeValue> entry : msgAttributes.entrySet()) {
-            totalMsgAttributesSize += Util.getStringSizeInBytes(entry.getKey());
-
-            MessageAttributeValue entryVal = entry.getValue();
-            if (entryVal.dataType() != null) {
-                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.dataType());
-            }
-
-            String stringVal = entryVal.stringValue();
-            if (stringVal != null) {
-                totalMsgAttributesSize += Util.getStringSizeInBytes(entryVal.stringValue());
-            }
-
-            SdkBytes binaryVal = entryVal.binaryValue();
-            if (binaryVal != null) {
-                totalMsgAttributesSize += binaryVal.asByteArray().length;
-            }
-        }
-        return totalMsgAttributesSize;
-    }
-
     private SendMessageBatchRequestEntry storeMessageInS3(SendMessageBatchRequestEntry batchEntry) {
 
         // Read the content of the message from message body
@@ -976,10 +863,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         SendMessageBatchRequestEntry.Builder batchEntryBuilder = batchEntry.toBuilder();
 
         batchEntryBuilder.messageAttributes(
-            updateMessageAttributePayloadSize(batchEntry.messageAttributes(), messageContentSize));
+            updateMessageAttributePayloadSize(batchEntry.messageAttributes(), messageContentSize,
+                clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         batchEntryBuilder.messageBody(largeMessagePointer);
 
         return batchEntryBuilder.build();
@@ -995,40 +883,33 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
 
         sendMessageRequestBuilder.messageAttributes(
-            updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), messageContentSize));
+            updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), messageContentSize,
+                clientConfiguration.usesLegacyReservedAttributeName()));
 
         // Store the message content in S3.
-        String largeMessagePointer = payloadStore.storeOriginalPayload(messageContentStr);
+        String largeMessagePointer = storeOriginalPayload(messageContentStr);
         sendMessageRequestBuilder.messageBody(largeMessagePointer);
 
         return sendMessageRequestBuilder.build();
     }
 
-    private Map<String, MessageAttributeValue> updateMessageAttributePayloadSize(
-        Map<String, MessageAttributeValue> messageAttributes, Long messageContentSize) {
-        Map<String, MessageAttributeValue> updatedMessageAttributes = new HashMap<>(messageAttributes);
-
-        // Add a new message attribute as a flag
-        MessageAttributeValue.Builder messageAttributeValueBuilder = MessageAttributeValue.builder();
-        messageAttributeValueBuilder.dataType("Number");
-        messageAttributeValueBuilder.stringValue(messageContentSize.toString());
-        MessageAttributeValue messageAttributeValue = messageAttributeValueBuilder.build();
-
-        if (!clientConfiguration.usesLegacyReservedAttributeName()) {
-            updatedMessageAttributes.put(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
-        } else {
-            updatedMessageAttributes.put(LEGACY_RESERVED_ATTRIBUTE_NAME, messageAttributeValue);
+    private String storeOriginalPayload(String messageContentStr) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isBlank(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr);
         }
-        return updatedMessageAttributes;
+        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
     }
 
     @SuppressWarnings("unchecked")
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
-        return (T) builder
-                .overrideConfiguration(
-                        AwsRequestOverrideConfiguration.builder()
-                                .addApiName(ApiName.builder().name(USER_AGENT_NAME)
-                                        .version(USER_AGENT_VERSION).build())
-                                .build());
+        return AmazonSQSExtendedClientUtil.appendUserAgent(builder, USER_AGENT_NAME, USER_AGENT_VERSION);
     }
+
+	@Override
+	public void close() {
+		super.close();
+		this.clientConfiguration.getS3Client().close();
+	}    
+    
 }

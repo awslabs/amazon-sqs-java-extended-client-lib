@@ -16,6 +16,8 @@
 package com.amazon.sqs.javamessaging;
 
 
+import java.util.regex.Pattern;
+
 public class SQSExtendedClientConstants {
     // This constant is shared with SNSExtendedClient
     // SNS team should be notified of any changes made to this
@@ -31,4 +33,12 @@ public class SQSExtendedClientConstants {
 
     public static final String S3_BUCKET_NAME_MARKER = "-..s3BucketName..-";
     public static final String S3_KEY_MARKER = "-..s3Key..-";
+
+    public static final int UUID_LENGTH = 36;
+
+    public static final int MAX_S3_KEY_LENGTH = 1024;
+
+    public static final int MAX_S3_KEY_PREFIX_LENGTH = MAX_S3_KEY_LENGTH - UUID_LENGTH;
+
+    public static final Pattern INVALID_S3_PREFIX_KEY_CHARACTERS_PATTERN = Pattern.compile("[^a-zA-Z0-9./_-]");
 }
