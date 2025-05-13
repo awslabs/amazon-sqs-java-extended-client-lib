@@ -25,12 +25,14 @@ import org.mockito.MockedStatic;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -59,6 +61,7 @@ import java.util.stream.IntStream;
 
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -694,6 +697,60 @@ public class AmazonSQSExtendedClientTest {
         assertEquals(expectedMessage, actualMessage.body());
         assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
         verify(mockS3, times(1)).getObject(isA(GetObjectRequest.class));
+    }
+
+    @Test
+    public void testReceiveMessage_when_ignorePayloadNotFound_then_messageWithPayloadNotFoundIsDeletedFromSQS() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withIgnorePayloadNotFound(true);
+        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        String receiptHandle = "receipt-handle";
+        Message message = Message.builder()
+                .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, MessageAttributeValue.builder().build()))
+                .body(new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson())
+                .receiptHandle(receiptHandle)
+                .build();
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(ReceiveMessageResponse.builder().messages(message).build());
+        doThrow(NoSuchKeyException.class).when(mockS3).getObject(any(GetObjectRequest.class));
+
+        ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();
+        ReceiveMessageResponse receiveMessageResponse = sqsExtended.receiveMessage(messageRequest);
+
+        Assert.assertTrue(receiveMessageResponse.messages().isEmpty());
+
+        ArgumentCaptor<DeleteMessageRequest> deleteMessageRequestArgumentCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(mockSqsBackend).deleteMessage(deleteMessageRequestArgumentCaptor.capture());
+        Assert.assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().queueUrl());
+        Assert.assertEquals(receiptHandle, deleteMessageRequestArgumentCaptor.getValue().receiptHandle());
+    }
+
+    @Test
+    public void testReceiveMessage_when_ignorePayloadNotFoundIsFalse_then_messageWithPayloadNotFoundThrowsException() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withIgnorePayloadNotFound(false);
+        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+
+        Message message = Message.builder()
+                .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, MessageAttributeValue.builder().build()))
+                .body(new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson())
+                .receiptHandle("receipt-handle")
+                .build();
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(ReceiveMessageResponse.builder().messages(message).build());
+        doThrow(NoSuchKeyException.class).when(mockS3).getObject(any(GetObjectRequest.class));
+
+        ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().build();
+        try {
+            sqsExtended.receiveMessage(messageRequest);
+            fail("Expected exception after receiving NoSuchKeyException from S3 was not thrown.");
+        } catch (SdkException e) {
+            assertEquals(NoSuchKeyException.class.getName(), e.getCause().getClass().getName());
+            verify(mockSqsBackend, never()).deleteMessage(any(DeleteMessageRequest.class));
+        }
     }
 
     private DeleteMessageBatchRequest generateLargeDeleteBatchRequest(List<String> originalReceiptHandles) {
