@@ -30,6 +30,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -624,7 +625,7 @@ public class AmazonSQSExtendedClientTest {
         IntStream.range(0, originalReceiptHandles.size()).forEach(i -> assertEquals(
             originalReceiptHandles.get(i),
             request.entries().get(i).receiptHandle()));
-        verify(mockS3, times(batchSize)).deleteObject(any(DeleteObjectRequest.class));
+        verify(mockS3, times(1)).deleteObjects(any(DeleteObjectsRequest.class));
     }
 
     @Test

@@ -712,6 +712,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         List<DeleteMessageBatchRequestEntry> entries = new ArrayList<>(deleteMessageBatchRequest.entries().size());
+        List<String> s3ToCleanup = new ArrayList<>(deleteMessageBatchRequest.entries().size());
         for (DeleteMessageBatchRequestEntry entry : deleteMessageBatchRequest.entries()) {
             DeleteMessageBatchRequestEntry.Builder entryBuilder = entry.toBuilder();
             String receiptHandle = entry.receiptHandle();
@@ -723,7 +724,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                 // Delete s3 payload if needed
                 if (clientConfiguration.doesCleanupS3Payload()) {
                     String messagePointer = getMessagePointerFromModifiedReceiptHandle(receiptHandle);
-                    payloadStore.deleteOriginalPayload(messagePointer);
+                    s3ToCleanup.add(messagePointer);
                 }
             }
 
@@ -732,6 +733,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         }
 
         deleteMessageBatchRequestBuilder.entries(entries);
+
+        if (!s3ToCleanup.isEmpty()) {
+            payloadStore.deleteOriginalPayloads(s3ToCleanup);
+        }
+
         return super.deleteMessageBatch(deleteMessageBatchRequestBuilder.build());
     }
 
