@@ -706,6 +706,7 @@ public class AmazonSQSExtendedClientTest {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
                 .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
                 .withIgnorePayloadNotFound(true);
+
         SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
 
         String receiptHandle = "receipt-handle";
@@ -716,6 +717,7 @@ public class AmazonSQSExtendedClientTest {
                 .build();
 
         when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(ReceiveMessageResponse.builder().messages(message).build());
+
         doThrow(NoSuchKeyException.class).when(mockS3).getObject(any(GetObjectRequest.class));
 
         ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();

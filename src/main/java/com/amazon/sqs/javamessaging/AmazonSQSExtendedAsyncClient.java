@@ -13,9 +13,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -193,6 +195,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         messageAttributeNames.removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
         messageAttributeNames.addAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
         receiveMessageRequestBuilder.messageAttributeNames(messageAttributeNames);
+        String queueUrl = receiveMessageRequest.queueUrl();
         receiveMessageRequest = receiveMessageRequestBuilder.build();
 
         return super.receiveMessage(receiveMessageRequest)
@@ -222,7 +225,28 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
 
                         // Retrieve original payload
                         modifiedMessageFutures.add(payloadStore.getOriginalPayload(largeMessagePointer)
-                            .thenApply(originalPayload -> {
+                            .handle((originalPayload,throwable) -> {
+
+                                if(throwable != null)
+                                {
+                                    if(clientConfiguration.ignoresPayloadNotFound())
+                                    {
+                                        DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+                                                .builder()
+                                                .queueUrl(queueUrl)
+                                                .receiptHandle(message.receiptHandle())
+                                                .build();
+
+                                        deleteMessage(deleteMessageRequest).join();
+                                        LOG.warn("Message deleted from SQS since payload with pointer could not be found in S3.");
+                                        return null;
+                                    }
+                                    else
+                                    {
+                                        throw new CompletionException(throwable);
+                                    }
+                                }
+
                                 // Set original payload
                                 messageBuilder.body(originalPayload);
 
@@ -249,6 +273,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                         modifiedMessageFutures.toArray(new CompletableFuture[modifiedMessageFutures.size()]))
                     .thenApply(v -> modifiedMessageFutures.stream()
                         .map(CompletableFuture::join)
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toList()));
             })
             .thenApply(modifiedMessages -> {
