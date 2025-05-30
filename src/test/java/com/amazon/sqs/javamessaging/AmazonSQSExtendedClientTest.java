@@ -67,9 +67,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -704,6 +706,7 @@ public class AmazonSQSExtendedClientTest {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
                 .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
                 .withIgnorePayloadNotFound(true);
+
         SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
 
         String receiptHandle = "receipt-handle";
@@ -714,17 +717,18 @@ public class AmazonSQSExtendedClientTest {
                 .build();
 
         when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(ReceiveMessageResponse.builder().messages(message).build());
+
         doThrow(NoSuchKeyException.class).when(mockS3).getObject(any(GetObjectRequest.class));
 
         ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();
         ReceiveMessageResponse receiveMessageResponse = sqsExtended.receiveMessage(messageRequest);
 
-        Assert.assertTrue(receiveMessageResponse.messages().isEmpty());
+        assertTrue(receiveMessageResponse.messages().isEmpty());
 
         ArgumentCaptor<DeleteMessageRequest> deleteMessageRequestArgumentCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
         verify(mockSqsBackend).deleteMessage(deleteMessageRequestArgumentCaptor.capture());
-        Assert.assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().queueUrl());
-        Assert.assertEquals(receiptHandle, deleteMessageRequestArgumentCaptor.getValue().receiptHandle());
+        assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().queueUrl());
+        assertEquals(receiptHandle, deleteMessageRequestArgumentCaptor.getValue().receiptHandle());
     }
 
     @Test

@@ -7,9 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,14 +38,17 @@ import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
+import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchResponse;
@@ -638,6 +644,63 @@ public class AmazonSQSExtendedAsyncClientTest {
         assertEquals(expectedMessage, actualMessage.body());
         assertFalse(actualMessage.messageAttributes().keySet().containsAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES));
         verify(mockS3, times(1)).getObject(isA(GetObjectRequest.class), isA(AsyncResponseTransformer.class));
+    }
+
+    @Test
+    public void testReceiveMessage_when_ignorePayloadNotFound_then_messageWithPayloadNotFoundIsDeletedFromSQS() {
+        ExtendedAsyncClientConfiguration extendedAsyncClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withIgnorePayloadNotFound(true);
+        SqsAsyncClient sqsAsyncExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedAsyncClientConfiguration));
+
+        String receiptHandle = "receipt-handle";
+        Message message = Message.builder()
+                .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, MessageAttributeValue.builder().build()))
+                .body(new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson())
+                .receiptHandle(receiptHandle)
+                .build();
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(
+               CompletableFuture.completedFuture(ReceiveMessageResponse.builder().messages(message).build()));
+        doThrow(NoSuchKeyException.class).when(mockS3).getObject((GetObjectRequest) any(), any(AsyncResponseTransformer.class));
+
+        ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();
+        ReceiveMessageResponse receiveMessageResponse = sqsAsyncExtended.receiveMessage(messageRequest).join();
+
+        assertTrue(receiveMessageResponse.messages().isEmpty());
+
+        ArgumentCaptor<DeleteMessageRequest> deleteMessageRequestArgumentCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(mockSqsBackend).deleteMessage(deleteMessageRequestArgumentCaptor.capture());
+        assertEquals(SQS_QUEUE_URL, deleteMessageRequestArgumentCaptor.getValue().queueUrl());
+        assertEquals(receiptHandle, deleteMessageRequestArgumentCaptor.getValue().receiptHandle());
+    }
+
+    @Test
+    public void testReceiveMessage_when_ignorePayloadNotFoundIsFalse_then_messageWithPayloadNotFoundThrowsException() {
+        ExtendedAsyncClientConfiguration extendedAsyncClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withIgnorePayloadNotFound(false);
+        SqsAsyncClient sqsAsyncExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedAsyncClientConfiguration));
+
+        String receiptHandle = "receipt-handle";
+        Message message = Message.builder()
+                .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, MessageAttributeValue.builder().build()))
+                .body(new PayloadS3Pointer(S3_BUCKET_NAME, "S3Key").toJson())
+                .receiptHandle(receiptHandle)
+                .build();
+
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class))).thenReturn(
+                CompletableFuture.completedFuture(ReceiveMessageResponse.builder().messages(message).build()));
+        doThrow(NoSuchKeyException.class).when(mockS3).getObject((GetObjectRequest) any(), any(AsyncResponseTransformer.class));
+
+        ReceiveMessageRequest messageRequest = ReceiveMessageRequest.builder().build();
+        try {
+            sqsAsyncExtended.receiveMessage(messageRequest).join();
+            fail("Expected exception after receiving NoSuchKeyException from S3 was not thrown.");
+        } catch (CompletionException e) {
+            assertEquals(NoSuchKeyException.class.getName(), e.getCause().getClass().getName());
+            verify(mockSqsBackend, never()).deleteMessage(any(DeleteMessageRequest.class));
+        }
     }
 
     private DeleteMessageBatchRequest generateLargeDeleteBatchRequest(List<String> originalReceiptHandles) {
