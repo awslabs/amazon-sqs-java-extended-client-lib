@@ -224,4 +224,58 @@ public class ExtendedClientConfigurationTest {
 
         assertThrows(SdkClientException.class, () -> extendedClientConfiguration.withS3KeyPrefix(s3KeyPrefix));
     }
+
+    @Test
+    public void testMultipartUploadEnabled() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadEnabled(true);
+
+        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
+    }
+
+    @Test
+    public void testMultipartUploadThresholdCustomValue() {
+        int customThreshold = 10 * 1024 * 1024; // 10MB
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadThreshold(customThreshold);
+
+        assertEquals(customThreshold, extendedClientConfiguration.getMultipartUploadThreshold());
+    }
+
+    @Test
+    public void testMultipartUploadPartSizeCustomValue() {
+        int customPartSize = 10 * 1024 * 1024; // 10MB
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadPartSize(customPartSize);
+
+        assertEquals(customPartSize, extendedClientConfiguration.getMultipartUploadPartSize());
+    }
+
+    @Test
+    public void testMultipartUploadPartSizeBelowMinimumRoundedUpTo5MB() {
+        int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadPartSize(belowMinimum);
+
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadPartSize());
+    }
+
+    @Test
+    public void testMultipartConfigurationInCopyConstructor() {
+        S3Client s3 = mock(S3Client.class);
+        int customThreshold = 10 * 1024 * 1024;
+        int customPartSize = 8 * 1024 * 1024;
+
+        ExtendedClientConfiguration originalConfig = new ExtendedClientConfiguration();
+        originalConfig.withPayloadSupportEnabled(s3, s3BucketName)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(customThreshold)
+                .withMultipartUploadPartSize(customPartSize);
+
+        ExtendedClientConfiguration copiedConfig = new ExtendedClientConfiguration(originalConfig);
+
+        assertTrue(copiedConfig.isMultipartUploadEnabled());
+        assertEquals(customThreshold, copiedConfig.getMultipartUploadThreshold());
+        assertEquals(customPartSize, copiedConfig.getMultipartUploadPartSize());
+    }
 }

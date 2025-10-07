@@ -76,7 +76,9 @@ import software.amazon.awssdk.services.sqs.model.SqsException;
 import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
 import software.amazon.awssdk.utils.StringUtils;
 import software.amazon.payloadoffloading.PayloadStore;
+import software.amazon.payloadoffloading.MultipartPayloadStore;
 import software.amazon.payloadoffloading.S3BackedPayloadStore;
+import software.amazon.payloadoffloading.S3BackedMultipartPayloadStore;
 import software.amazon.payloadoffloading.S3Dao;
 import software.amazon.payloadoffloading.Util;
 
@@ -145,7 +147,15 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(),
                 clientConfiguration.getServerSideEncryptionStrategy(),
                 clientConfiguration.getObjectCannedACL());
-        this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
+        if (clientConfiguration.isMultipartUploadEnabled()) {
+            this.payloadStore = new S3BackedMultipartPayloadStore(
+                s3Dao,
+                clientConfiguration.getS3BucketName(),
+                clientConfiguration.getMultipartUploadPartSize(),
+                clientConfiguration.getMultipartUploadThreshold());
+        } else {
+            this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
+        }
     }
 
     /**
@@ -895,13 +905,32 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     private String storeOriginalPayload(String messageContentStr) {
         String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
-        if (StringUtils.isBlank(s3KeyPrefix)) {
-            return payloadStore.storeOriginalPayload(messageContentStr);
+        String key = StringUtils.isBlank(s3KeyPrefix) ? UUID.randomUUID().toString() : s3KeyPrefix + UUID.randomUUID();
+        
+        if (clientConfiguration.isMultipartUploadEnabled()) {
+            String multipartResult = tryMultipartUpload(messageContentStr, key);
+            if (multipartResult != null) {
+                return multipartResult;
+            }
         }
-        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
+        
+        return payloadStore.storeOriginalPayload(messageContentStr, key);
     }
 
-    @SuppressWarnings("unchecked")
+    private String tryMultipartUpload(String payload, String candidateKey) {
+        long sizeBytes = Util.getStringSizeInBytes(payload);
+        if (sizeBytes < clientConfiguration.getMultipartUploadThreshold()) {
+            return null;
+        }
+
+        try {
+            return ((MultipartPayloadStore) payloadStore).storeOriginalPayloadMultipart(payload, candidateKey);
+        } catch (RuntimeException e) {
+            LOG.warn("Multipart upload attempt failed; falling back to standard single-part upload.");
+            return null; 
+        }
+    }
+
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
         return AmazonSQSExtendedClientUtil.appendUserAgent(builder, USER_AGENT_NAME, USER_AGENT_VERSION);
     }

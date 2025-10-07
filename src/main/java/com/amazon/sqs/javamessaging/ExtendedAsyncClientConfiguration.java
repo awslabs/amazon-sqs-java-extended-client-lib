@@ -212,4 +212,29 @@ public class ExtendedAsyncClientConfiguration extends PayloadStorageAsyncConfigu
         this.setServerSideEncryptionStrategy(serverSideEncryption);
         return this;
     }
+
+    /**
+     * Enables or disables multipart upload support for large payload storage operations.
+     * @param enabled true to enable multipart uploads when threshold exceeded.
+     * @return updated configuration
+     */
+    public ExtendedAsyncClientConfiguration withMultipartUploadEnabled(boolean enabled) {
+        setMultipartUploadEnabled(enabled);
+        return this;
+    }
+
+    /**
+     * Sets the multipart upload threshold (in bytes). Only used when multipart upload is enabled.
+     * @param threshold threshold in bytes (>0). Values <=0 reset to default (5MB)
+     * @return updated configuration
+     */
+    public ExtendedAsyncClientConfiguration withMultipartUploadThreshold(int threshold) {
+        setMultipartUploadThreshold(threshold);
+        return this;
+    }
+
+    public ExtendedAsyncClientConfiguration withMultipartUploadPartSize(int partSize) {
+        setMultipartUploadPartSize(partSize);
+        return this;
+    }
 }

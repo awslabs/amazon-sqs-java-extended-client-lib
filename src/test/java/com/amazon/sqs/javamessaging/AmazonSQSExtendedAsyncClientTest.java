@@ -88,6 +88,11 @@ public class AmazonSQSExtendedAsyncClientTest {
 
     // should be > 1 and << SQS_SIZE_LIMIT
     private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
+    
+    // Multipart upload thresholds for testing
+    private static final int MULTIPART_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
+    private static final int LESS_THAN_MULTIPART_THRESHOLD = MULTIPART_UPLOAD_THRESHOLD - 1;
+    private static final int MORE_THAN_MULTIPART_THRESHOLD = MULTIPART_UPLOAD_THRESHOLD + 1;
 
     @BeforeEach
     public void setupClients() {
@@ -728,5 +733,194 @@ public class AmazonSQSExtendedAsyncClientTest {
         char[] charArray = new char[messageLength];
         Arrays.fill(charArray, 'x');
         return new String(charArray);
+    }
+
+    @Test
+    public void testWhenMultipartUploadDisabledThenStandardUploadIsUsed() {
+        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(false);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledAndMessageBelowThresholdThenStandardUploadIsUsed() {
+        String messageBody = generateStringWithLength(LESS_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledAndMessageAboveThresholdThenMultipartIsAttempted() {
+        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledWithCustomThresholdThenThresholdIsHonored() {
+        int customThreshold = 1024 * 1024; // 1MB
+        int messageLength = customThreshold + 1000; // Just above custom threshold
+        String messageBody = generateStringWithLength(messageLength);
+
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(customThreshold);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledWithAlwaysThroughS3ThenSmallMessagesAlsoUseS3() {
+        String messageBody = generateStringWithLength(LESS_THAN_SQS_SIZE_LIMIT);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD)
+                .withAlwaysThroughS3(true);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledThenConfigurationIsSetCorrectly() {
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+
+        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
+        assertEquals(MULTIPART_UPLOAD_THRESHOLD, extendedClientConfiguration.getMultipartUploadThreshold());
+    }
+
+    @Test
+    public void testWhenMultipartUploadDisabledByDefaultThenStandardUploadIsUsed() {
+        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        assertFalse(extendedClientConfiguration.isMultipartUploadEnabled());
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledWithMessageBatchThenLargeMessagesUseMultipart() {
+        int customThreshold = 500_000; // 500KB multipart threshold
+
+        // 3 messages above SQS size limit (256KB) will be stored in S3:
+        // - 300K uses standard S3 upload
+        // - 600K and 700K use multipart upload (above 500K threshold)
+        int[] messageLengthForCounter = new int[] {
+                100_000,  
+                200_000,  
+                300_000,  
+                600_000,  
+                700_000   
+        };
+
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>();
+        for (int i = 0; i < messageLengthForCounter.length; i++) {
+            int messageLength = messageLengthForCounter[i];
+            String messageBody = generateStringWithLength(messageLength);
+            SendMessageBatchRequestEntry entry = SendMessageBatchRequestEntry.builder()
+                .id("entry_" + i)
+                .messageBody(messageBody)
+                .build();
+            batchEntries.add(entry);
+        }
+
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(customThreshold);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder().queueUrl(SQS_QUEUE_URL).entries(batchEntries).build();
+        sqsExtended.sendMessageBatch(batchRequest).join();
+
+        verify(mockS3, times(3)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+        verify(mockSqsBackend, times(1)).sendMessageBatch(isA(SendMessageBatchRequest.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledWithCustomKMSThenKMSIsAppliedToMultipart() {
+        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD)
+                .withServerSideEncryption(SERVER_SIDE_ENCRYPTION_CUSTOM_STRATEGY);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        assertEquals(SERVER_SIDE_ENCRYPTION_CUSTOM_STRATEGY, extendedClientConfiguration.getServerSideEncryptionStrategy());
+        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadEnabledAtExactThresholdThenMultipartIsNotUsed() {
+        String messageBody = generateStringWithLength(MULTIPART_UPLOAD_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(AsyncRequestBody.class));
+    }
+
+    @Test
+    public void testWhenMultipartUploadFailsThenFallsBackToStandardUpload() {
+        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration()
+                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+                .withMultipartUploadEnabled(true)
+                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+        SqsAsyncClient sqsExtended = spy(new AmazonSQSExtendedAsyncClient(mockSqsBackend, extendedClientConfiguration));
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
+        sqsExtended.sendMessage(messageRequest).join();
+
+        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
     }
 }

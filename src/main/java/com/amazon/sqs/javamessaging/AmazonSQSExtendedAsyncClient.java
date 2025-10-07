@@ -50,6 +50,7 @@ import software.amazon.awssdk.utils.StringUtils;
 import software.amazon.payloadoffloading.PayloadStoreAsync;
 import software.amazon.payloadoffloading.S3AsyncDao;
 import software.amazon.payloadoffloading.S3BackedPayloadStoreAsync;
+import software.amazon.payloadoffloading.S3BackedMultipartPayloadStoreAsync;
 import software.amazon.payloadoffloading.Util;
 
 /**
@@ -129,7 +130,15 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         S3AsyncDao s3Dao = new S3AsyncDao(clientConfiguration.getS3AsyncClient(),
             clientConfiguration.getServerSideEncryptionStrategy(),
             clientConfiguration.getObjectCannedACL());
-        this.payloadStore = new S3BackedPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
+        if (clientConfiguration.isMultipartUploadEnabled()) {
+            this.payloadStore = new S3BackedMultipartPayloadStoreAsync(
+                s3Dao,
+                clientConfiguration.getS3BucketName(),
+                clientConfiguration.getMultipartUploadPartSize(),
+                clientConfiguration.getMultipartUploadThreshold());
+        } else {
+            this.payloadStore = new S3BackedPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
+        }
     }
 
     /**
@@ -524,10 +533,37 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
 
     private CompletableFuture<String> storeOriginalPayload(String messageContentStr) {
         String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
-        if (StringUtils.isBlank(s3KeyPrefix)) {
-            return payloadStore.storeOriginalPayload(messageContentStr);
+        String key = StringUtils.isBlank(s3KeyPrefix) ? UUID.randomUUID().toString() : s3KeyPrefix + UUID.randomUUID();
+        
+        if (clientConfiguration.isMultipartUploadEnabled()) {
+            CompletableFuture<String> multipartResult = tryMultipartUploadAsync(messageContentStr, key);
+            return multipartResult.thenCompose(result -> result != null ?
+                CompletableFuture.completedFuture(result) :
+                payloadStore.storeOriginalPayload(messageContentStr, key));
         }
-        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
+        
+        return payloadStore.storeOriginalPayload(messageContentStr, key);
+    }
+
+    private CompletableFuture<String> tryMultipartUploadAsync(String payload, String candidateKey) {
+        if (!(payloadStore instanceof software.amazon.payloadoffloading.MultipartPayloadStoreAsync)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        long sizeBytes = Util.getStringSizeInBytes(payload);
+        if (sizeBytes < clientConfiguration.getMultipartUploadThreshold()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        try {
+            return ((software.amazon.payloadoffloading.MultipartPayloadStoreAsync) payloadStore)
+                .storeOriginalPayloadMultipart(payload, candidateKey)
+                .exceptionally(ex -> {
+                    LOG.warn("Multipart upload attempt failed; falling back to standard single-part upload.");
+                    return null;
+                });
+        } catch (RuntimeException e) {
+            LOG.warn("Multipart upload attempt failed; falling back to standard single-part upload.");
+            return CompletableFuture.completedFuture(null);
+        }
     }
 
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {

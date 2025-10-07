@@ -233,6 +233,36 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     }
 
     /**
+     * Enables or disables multipart upload support for large payload storage operations.
+     * @param enabled true to enable multipart uploads when threshold exceeded.
+     * @return updated configuration
+     */
+    public ExtendedClientConfiguration withMultipartUploadEnabled(boolean enabled) {
+        setMultipartUploadEnabled(enabled);
+        return this;
+    }
+
+    /**
+     * Sets the multipart upload threshold (in bytes). Only used when multipart upload is enabled.
+     * @param threshold threshold in bytes (>0). Values <=0 reset to default (5MB)
+     * @return updated configuration
+     */
+    public ExtendedClientConfiguration withMultipartUploadThreshold(int threshold) {
+        setMultipartUploadThreshold(threshold);
+        return this;
+    }
+
+
+    /**
+     * Sets the multipart upload part size (in bytes). Only used when multipart upload is enabled.
+     * @param partSize part size in bytes (>0). Values <=0 reset to default (5MB)
+     */
+    public ExtendedClientConfiguration withMultipartUploadPartSize(int partSize) {
+        setMultipartUploadPartSize(partSize);
+        return this;
+    }
+
+    /**
      * Enables support for large-payload messages.
      *
      * @param s3

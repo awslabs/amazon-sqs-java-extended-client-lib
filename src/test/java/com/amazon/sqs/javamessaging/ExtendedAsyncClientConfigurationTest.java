@@ -85,4 +85,47 @@ public class ExtendedAsyncClientConfigurationTest {
         assertNotNull(extendedClientConfiguration.getS3AsyncClient());
         assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
+
+    @Test
+    public void testMultipartUploadDisabledByDefault() {
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+
+        assertFalse(extendedClientConfiguration.isMultipartUploadEnabled());
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadThreshold()); // 5MB default
+    }
+
+    @Test
+    public void testMultipartUploadEnabled() {
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadEnabled(true);
+
+        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
+    }
+
+    @Test
+    public void testMultipartUploadThresholdCustomValue() {
+        int customThreshold = 10 * 1024 * 1024; // 10MB
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadThreshold(customThreshold);
+
+        assertEquals(customThreshold, extendedClientConfiguration.getMultipartUploadThreshold());
+    }
+
+    @Test
+    public void testMultipartUploadPartSizeCustomValue() {
+        int customPartSize = 10 * 1024 * 1024; // 10MB
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadPartSize(customPartSize);
+
+        assertEquals(customPartSize, extendedClientConfiguration.getMultipartUploadPartSize());
+    }
+
+    @Test
+    public void testMultipartUploadPartSizeBelowMinimumRoundedUpTo5MB() {
+        int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+        extendedClientConfiguration.withMultipartUploadPartSize(belowMinimum);
+
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadPartSize());
+    }
 }
