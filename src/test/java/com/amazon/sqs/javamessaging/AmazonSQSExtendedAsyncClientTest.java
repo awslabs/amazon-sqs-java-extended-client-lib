@@ -783,7 +783,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withPayloadSizeThreshold(262144); // 256KB
-        config.setStreamUploadEnabled(true); // Enable stream uploads
+        config.setStreamUploadEnabled(true);
 
         AmazonSQSExtendedAsyncClient clientWithStream = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
 
@@ -807,12 +807,11 @@ public class AmazonSQSExtendedAsyncClientTest {
 
         @SuppressWarnings("unchecked")
         ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
-        when(mockStream.read(any(byte[].class))).thenReturn(-1); // End of stream
+        when(mockStream.read(any(byte[].class))).thenReturn(-1);
 
         when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
             .thenReturn(CompletableFuture.completedFuture(sqsResponse));
 
-        // Mock S3 to return ResponseInputStream for stream retrieval
         @SuppressWarnings("unchecked")
         CompletableFuture<ResponseInputStream<GetObjectResponse>> futureStream = CompletableFuture.completedFuture(mockStream);
         when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
@@ -826,8 +825,6 @@ public class AmazonSQSExtendedAsyncClientTest {
         assertEquals("msg1", streamMessage.getMessage().messageId());
         assertTrue(streamMessage.hasStreamPayload());
         assertSame(mockStream, streamMessage.getPayloadStream());
-
-        // Verify receipt handle was modified
         assertTrue(streamMessage.getMessage().receiptHandle().contains("test-key"));
     }
 
