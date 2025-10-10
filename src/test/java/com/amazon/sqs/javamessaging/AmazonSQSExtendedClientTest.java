@@ -85,6 +85,8 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayInputStream;
 
 
 /**
@@ -121,7 +123,6 @@ public class AmazonSQSExtendedClientTest {
     
     // Stream upload thresholds
     private static final int STREAM_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
-    private static final int LESS_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD - 1;
     private static final int MORE_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD + 1;
     
     // Stream part size
@@ -815,7 +816,6 @@ public class AmazonSQSExtendedClientTest {
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withStreamUploadEnabled(true)
             .withStreamUploadPartSize(STREAM_UPLOAD_PART_SIZE)
-            .withS3Region("ap-south-1")
             .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD);
         AmazonSQSExtendedClient sqsExtended = new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration);
         
@@ -839,13 +839,12 @@ public class AmazonSQSExtendedClientTest {
     public void testSendStreamMessage_LargeFileUpload_StoresInS3AndSendsPointer() {
         int fileSizeBytes = MORE_THAN_STREAM_THRESHOLD; 
         String fileContent = generateStringWithLength(fileSizeBytes);
-        java.io.InputStream fileStream = new java.io.ByteArrayInputStream(fileContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        InputStream fileStream = new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
         
         ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withStreamUploadEnabled(true)
-            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD)
-            .withS3Region("us-east-1");
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD);
         
         SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
         
@@ -916,8 +915,7 @@ public class AmazonSQSExtendedClientTest {
         ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withStreamUploadEnabled(true)
-            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD) // 5MB
-            .withS3Region("us-east-1");
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD); // 5MB
         
         SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
         
@@ -931,7 +929,7 @@ public class AmazonSQSExtendedClientTest {
             .id("msg1")
             .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("small").dataType("String").build()))
             .build());
-        streams.add(new java.io.ByteArrayInputStream(smallMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        streams.add(new ByteArrayInputStream(smallMsg.getBytes(StandardCharsets.UTF_8)));
         contentLengths.add((long) smallMsg.length());
         
         // Large message (300KB - above SQS limit but below stream threshold)
@@ -940,7 +938,7 @@ public class AmazonSQSExtendedClientTest {
             .id("msg2")
             .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("large").dataType("String").build()))
             .build());
-        streams.add(new java.io.ByteArrayInputStream(largeMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        streams.add(new java.io.ByteArrayInputStream(largeMsg.getBytes(StandardCharsets.UTF_8)));
         contentLengths.add((long) largeMsg.length());
         
         // Very large message (6MB - above stream threshold, uses multipart)
@@ -948,7 +946,7 @@ public class AmazonSQSExtendedClientTest {
         entries.add(SendMessageBatchRequestEntry.builder()
             .id("msg3")
             .build());
-        streams.add(new java.io.ByteArrayInputStream(veryLargeMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        streams.add(new java.io.ByteArrayInputStream(veryLargeMsg.getBytes(StandardCharsets.UTF_8)));
         contentLengths.add((long) veryLargeMsg.length());
         
         SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder()
@@ -976,7 +974,7 @@ public class AmazonSQSExtendedClientTest {
     public void testSendStreamMessage_WithEncryption_AppliesKMSToS3Upload() {
         int dataSize = MORE_THAN_SQS_SIZE_LIMIT;
         String sensitiveData = generateStringWithLength(dataSize);
-        java.io.InputStream stream = new java.io.ByteArrayInputStream(sensitiveData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        InputStream stream = new ByteArrayInputStream(sensitiveData.getBytes(StandardCharsets.UTF_8));
         
         SendMessageRequest request = SendMessageRequest.builder()
             .queueUrl(SQS_QUEUE_URL)

@@ -252,11 +252,6 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         return this;
     }
 
-    public ExtendedClientConfiguration withS3Region(String s3Region) {
-        setS3Region(s3Region);
-        return this;
-    }
-
     /**
      * Enables support for large-payload messages.
      *

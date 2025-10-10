@@ -35,18 +35,13 @@ import java.util.UUID;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.AwsRequest;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.util.VersionInfo;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
@@ -157,22 +152,17 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     public AmazonSQSExtendedClient(SqsClient sqsClient, ExtendedClientConfiguration extendedClientConfig) {
         super(sqsClient);
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
-        if (clientConfiguration.isStreamUploadEnabled()) {
-            S3AsyncClient s3AsyncClient = S3AsyncClient.builder()
-                .multipartEnabled(true)
-                .multipartConfiguration(
-                    multipartConfig -> multipartConfig
-                        .minimumPartSizeInBytes(clientConfiguration.getStreamUploadPartSize())
-                        .thresholdInBytes(clientConfiguration.getStreamUploadThreshold())
-                )
-                .credentialsProvider(DefaultCredentialsProvider.create())
-                .region(Region.of(clientConfiguration.getS3Region()))
-                .build();
 
-            S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(), s3AsyncClient, clientConfiguration.getServerSideEncryptionStrategy(), clientConfiguration.getObjectCannedACL());
+        if (clientConfiguration.isStreamUploadEnabled()) {
+            S3Dao s3Dao = new S3Dao(
+                        clientConfiguration.getS3Client(), 
+                        clientConfiguration.getServerSideEncryptionStrategy(), 
+                        clientConfiguration.getObjectCannedACL(), 
+                        clientConfiguration.getStreamUploadPartSize(),
+                        clientConfiguration.getStreamUploadThreshold());
             this.payloadStore = new S3BackedStreamPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
         } else {
-            S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(), clientConfiguration.getS3AsyncClient(), clientConfiguration.getServerSideEncryptionStrategy(), clientConfiguration.getObjectCannedACL());
+            S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(), clientConfiguration.getServerSideEncryptionStrategy(), clientConfiguration.getObjectCannedACL());
             this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
         }
     }
@@ -787,7 +777,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             // Convert stream to string for non-extended client
             try {
-                String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStream);
+                String messageBody = IoUtils.toUtf8String(messageBodyStream);
                 sendMessageRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
                 return super.sendMessage(sendMessageRequest);
             } catch (IOException e) {
@@ -810,7 +800,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         } else {
             // Convert stream to string for small messages
             try {
-                String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStream);
+                String messageBody = IoUtils.toUtf8String(messageBodyStream);
                 sendMessageRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
             } catch (IOException e) {
                 throw new RuntimeException("Failed to read from InputStream", e);
@@ -831,8 +821,8 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * @return Result of the SendMessageBatch operation returned by the service.
      */
     public SendMessageBatchResponse sendStreamMessageBatch(SendMessageBatchRequest sendMessageBatchRequest,
-                                                          java.util.List<InputStream> messageBodyStreams,
-                                                          java.util.List<Long> contentLengths) {
+                                                           List<InputStream> messageBodyStreams,
+                                                           List<Long> contentLengths) {
 
         if (sendMessageBatchRequest == null) {
             String errorMessage = "sendMessageBatchRequest cannot be null.";
@@ -859,11 +849,11 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
         if (!clientConfiguration.isPayloadSupportEnabled()) {
             // Convert streams to strings for non-extended client
-            java.util.List<SendMessageBatchRequestEntry> entries = new java.util.ArrayList<>();
+            List<SendMessageBatchRequestEntry> entries = new ArrayList<>();
             for (int i = 0; i < sendMessageBatchRequest.entries().size(); i++) {
                 SendMessageBatchRequestEntry entry = sendMessageBatchRequest.entries().get(i);
                 try {
-                    String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStreams.get(i));
+                    String messageBody = IoUtils.toUtf8String(messageBodyStreams.get(i));
                     entries.add(entry.toBuilder().messageBody(messageBody).build());
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to read from InputStream", e);
@@ -891,7 +881,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
             } else {
                 // Convert stream to string for small messages
                 try {
-                    String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(stream);
+                    String messageBody = IoUtils.toUtf8String(stream);
                     entry = entry.toBuilder().messageBody(messageBody).build();
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to read from InputStream", e);

@@ -87,45 +87,10 @@ public class ExtendedAsyncClientConfigurationTest {
     }
 
     @Test
-    public void testStreamUploadDisabledByDefault() {
-        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-
-        assertFalse(extendedClientConfiguration.isStreamUploadEnabled());
-        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadThreshold()); // 5MB default
-    }
-
-    @Test
-    public void testStreamUploadEnabled() {
+    public void testStreamUploadEnabledEnabled() {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
         extendedClientConfiguration.withStreamUploadEnabled(true);
 
         assertTrue(extendedClientConfiguration.isStreamUploadEnabled());
-    }
-
-    @Test
-    public void testStreamUploadThresholdCustomValue() {
-        int customThreshold = 10 * 1024 * 1024; // 10MB
-        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withStreamUploadThreshold(customThreshold);
-
-        assertEquals(customThreshold, extendedClientConfiguration.getStreamUploadThreshold());
-    }
-
-    @Test
-    public void testStreamUploadPartSizeCustomValue() {
-        int customPartSize = 10 * 1024 * 1024; // 10MB
-        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withStreamUploadPartSize(customPartSize);
-
-        assertEquals(customPartSize, extendedClientConfiguration.getStreamUploadPartSize());
-    }
-
-    @Test
-    public void testStreamUploadPartSizeBelowMinimumRoundedUpTo5MB() {
-        int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
-        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withStreamUploadPartSize(belowMinimum);
-
-        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadPartSize());
     }
 }

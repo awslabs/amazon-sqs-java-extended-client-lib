@@ -212,34 +212,4 @@ public class ExtendedAsyncClientConfiguration extends PayloadStorageAsyncConfigu
         this.setServerSideEncryptionStrategy(serverSideEncryption);
         return this;
     }
-
-    /**
-     * Enables or disables stream upload support for large payload storage operations.
-     * @param enabled true to enable stream uploads when threshold exceeded.
-     * @return updated configuration
-     */
-    public ExtendedAsyncClientConfiguration withStreamUploadEnabled(boolean enabled) {
-        setStreamUploadEnabled(enabled);
-        return this;
-    }
-
-    /**
-     * Sets the threshold for stream upload in bytes.
-     * @param threshold the threshold in bytes
-     * @return updated configuration
-     */
-    public ExtendedAsyncClientConfiguration withStreamUploadThreshold(int threshold) {
-        setStreamUploadThreshold(threshold);
-        return this;
-    }
-
-    public ExtendedAsyncClientConfiguration withStreamUploadPartSize(int partSize) {
-        setStreamUploadPartSize(partSize);
-        return this;
-    }
-
-    public ExtendedAsyncClientConfiguration withS3Region(String s3Region) {
-        setS3Region(s3Region);
-        return this;
-    }
 }

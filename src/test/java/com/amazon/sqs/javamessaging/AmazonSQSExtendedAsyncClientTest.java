@@ -782,9 +782,8 @@ public class AmazonSQSExtendedAsyncClientTest {
     public void testReceiveMessageAsStream_LargeMessage_WithStreamStore_ReturnsMessageWithStream() throws IOException {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-            .withPayloadSizeThreshold(262144) // 256KB
-            .withStreamUploadEnabled(true)
-            .withStreamUploadThreshold(1024 * 1024); // 1MB
+            .withPayloadSizeThreshold(262144); // 256KB
+        config.setStreamUploadEnabled(true); // Enable stream uploads
 
         AmazonSQSExtendedAsyncClient clientWithStream = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
 
@@ -813,6 +812,7 @@ public class AmazonSQSExtendedAsyncClientTest {
         when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
             .thenReturn(CompletableFuture.completedFuture(sqsResponse));
 
+        // Mock S3 to return ResponseInputStream for stream retrieval
         @SuppressWarnings("unchecked")
         CompletableFuture<ResponseInputStream<GetObjectResponse>> futureStream = CompletableFuture.completedFuture(mockStream);
         when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
@@ -834,8 +834,7 @@ public class AmazonSQSExtendedAsyncClientTest {
     @Test
     public void testReceiveMessageAsStream_LargeMessage_WithoutStreamStore_FallsBackToRegularRetrieval() {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
-            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-            .withStreamUploadEnabled(false);
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
 
         AmazonSQSExtendedAsyncClient clientWithRegularStore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
 
@@ -880,8 +879,7 @@ public class AmazonSQSExtendedAsyncClientTest {
     public void testReceiveMessageAsStream_StreamRetrievalFails_IgnoreNotFoundEnabled_DeletesMessage() {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-            .withIgnorePayloadNotFound(true)
-            .withStreamUploadEnabled(true);
+            .withIgnorePayloadNotFound(true);
 
         AmazonSQSExtendedAsyncClient clientWithIgnore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
 
@@ -928,8 +926,7 @@ public class AmazonSQSExtendedAsyncClientTest {
     public void testReceiveMessageAsStream_StreamRetrievalFails_IgnoreNotFoundDisabled_ThrowsException() {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-            .withIgnorePayloadNotFound(false)
-            .withStreamUploadEnabled(true); 
+            .withIgnorePayloadNotFound(false);
 
         AmazonSQSExtendedAsyncClient clientWithIgnore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
         ReceiveMessageRequest request = ReceiveMessageRequest.builder()
@@ -967,9 +964,8 @@ public class AmazonSQSExtendedAsyncClientTest {
     public void testReceiveMessageAsStream_MultipleMessages_MixedTypes() throws IOException {
         ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-            .withPayloadSizeThreshold(262144) // 256KB
-            .withStreamUploadEnabled(true)
-            .withStreamUploadThreshold(1024 * 1024); // 1MB
+            .withPayloadSizeThreshold(262144); // 256KB
+        config.setStreamUploadEnabled(true); // Enable stream uploads
 
         AmazonSQSExtendedAsyncClient clientWithStream = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
 
@@ -999,12 +995,14 @@ public class AmazonSQSExtendedAsyncClientTest {
             .messages(Arrays.asList(smallMessage, largeMessage))
             .build();
 
+        @SuppressWarnings("unchecked")
         ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
         when(mockStream.read(any(byte[].class))).thenReturn(-1);
 
         when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
             .thenReturn(CompletableFuture.completedFuture(sqsResponse));
 
+        @SuppressWarnings("unchecked")
         CompletableFuture<ResponseInputStream<GetObjectResponse>> futureStream = CompletableFuture.completedFuture(mockStream);
         when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
             .thenReturn(futureStream);
