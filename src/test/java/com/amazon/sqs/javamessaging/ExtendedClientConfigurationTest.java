@@ -224,4 +224,58 @@ public class ExtendedClientConfigurationTest {
 
         assertThrows(SdkClientException.class, () -> extendedClientConfiguration.withS3KeyPrefix(s3KeyPrefix));
     }
+
+    @Test
+    public void testStreamUploadEnabled() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withStreamUploadEnabled(true);
+
+        assertTrue(extendedClientConfiguration.isStreamUploadEnabled());
+    }
+
+    @Test
+    public void testStreamUploadThresholdCustomValue() {
+        int customThreshold = 10 * 1024 * 1024; // 10MB
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withStreamUploadThreshold(customThreshold);
+
+        assertEquals(customThreshold, extendedClientConfiguration.getStreamUploadThreshold());
+    }
+
+    @Test
+    public void testStreamUploadPartSizeCustomValue() {
+        int customPartSize = 10 * 1024 * 1024; // 10MB
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withStreamUploadPartSize(customPartSize);
+
+        assertEquals(customPartSize, extendedClientConfiguration.getStreamUploadPartSize());
+    }
+
+    @Test
+    public void testStreamUploadPartSizeBelowMinimumRoundedUpTo5MB() {
+        int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.withStreamUploadPartSize(belowMinimum);
+
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadPartSize());
+    }
+
+    @Test
+    public void testStreamConfigurationInCopyConstructor() {
+        S3Client s3 = mock(S3Client.class);
+        int customThreshold = 10 * 1024 * 1024;
+        int customPartSize = 8 * 1024 * 1024;
+
+        ExtendedClientConfiguration originalConfig = new ExtendedClientConfiguration();
+        originalConfig.withPayloadSupportEnabled(s3, s3BucketName)
+                .withStreamUploadEnabled(true)
+                .withStreamUploadThreshold(customThreshold)
+                .withStreamUploadPartSize(customPartSize);
+
+        ExtendedClientConfiguration copiedConfig = new ExtendedClientConfiguration(originalConfig);
+
+        assertTrue(copiedConfig.isStreamUploadEnabled());
+        assertEquals(customThreshold, copiedConfig.getStreamUploadThreshold());
+        assertEquals(customPartSize, copiedConfig.getStreamUploadPartSize());
+    }
 }

@@ -233,6 +233,26 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     }
 
     /**
+     * Enables or disables stream upload support for large payload storage operations.
+     * @param enabled true to enable stream uploads when threshold exceeded.
+     * @return updated configuration
+     */
+    public ExtendedClientConfiguration withStreamUploadEnabled(boolean enabled) {
+        setStreamUploadEnabled(enabled);
+        return this;
+    }
+
+    public ExtendedClientConfiguration withStreamUploadThreshold(int threshold) {
+        setStreamUploadThreshold(threshold);
+        return this;
+    }
+
+    public ExtendedClientConfiguration withStreamUploadPartSize(int partSize) {
+        setStreamUploadPartSize(partSize);
+        return this;
+    }
+
+    /**
      * Enables support for large-payload messages.
      *
      * @param s3

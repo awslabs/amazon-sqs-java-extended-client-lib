@@ -85,4 +85,12 @@ public class ExtendedAsyncClientConfigurationTest {
         assertNotNull(extendedClientConfiguration.getS3AsyncClient());
         assertEquals(s3BucketName, extendedClientConfiguration.getS3BucketName());
     }
+
+    @Test
+    public void testStreamUploadEnabledEnabled() {
+        ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
+        extendedClientConfiguration.withStreamUploadEnabled(true);
+
+        assertTrue(extendedClientConfiguration.isStreamUploadEnabled());
+    }
 }

@@ -9,6 +9,10 @@ import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
 
+import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,9 +51,12 @@ import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 import software.amazon.awssdk.utils.StringUtils;
+import software.amazon.awssdk.utils.IoUtils;
 import software.amazon.payloadoffloading.PayloadStoreAsync;
 import software.amazon.payloadoffloading.S3AsyncDao;
 import software.amazon.payloadoffloading.S3BackedPayloadStoreAsync;
+import software.amazon.payloadoffloading.S3BackedStreamPayloadStoreAsync;
+import software.amazon.payloadoffloading.StreamPayloadStoreAsync;
 import software.amazon.payloadoffloading.Util;
 
 /**
@@ -129,7 +136,12 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         S3AsyncDao s3Dao = new S3AsyncDao(clientConfiguration.getS3AsyncClient(),
             clientConfiguration.getServerSideEncryptionStrategy(),
             clientConfiguration.getObjectCannedACL());
-        this.payloadStore = new S3BackedPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
+
+        if (clientConfiguration.isStreamUploadEnabled()) {
+            this.payloadStore = new S3BackedStreamPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
+        } else {
+            this.payloadStore = new S3BackedPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
+        }
     }
 
     /**
@@ -282,6 +294,154 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 receiveMessageResponseBuilder.messages(modifiedMessages);
                 return receiveMessageResponseBuilder.build();
             });
+    }
+
+    /**
+     * Receives messages from the specified queue with streaming access to large payloads.
+     *
+     * @param receiveMessageRequest The receive message request
+     * @return A CompletableFuture containing the response with streaming message access
+     */
+    public CompletableFuture<ReceiveStreamMessageResponse> receiveMessageAsStream(ReceiveMessageRequest receiveMessageRequest) {
+        if (receiveMessageRequest == null) {
+            String errorMessage = "receiveMessageRequest cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
+        appendUserAgent(receiveMessageRequestBuilder);
+
+        if (!clientConfiguration.isPayloadSupportEnabled()) {
+            // If payload support is disabled, fall back to regular receive and wrap in stream response
+            return super.receiveMessage(receiveMessageRequestBuilder.build())
+                .thenApply(receiveMessageResponse -> {
+                    List<StreamMessage> streamMessages = receiveMessageResponse.messages().stream()
+                        .map(message -> new StreamMessage(message, null))
+                        .collect(Collectors.toList());
+                    return new ReceiveStreamMessageResponse(streamMessages);
+                });
+        }
+
+        // Remove before adding to avoid any duplicates
+        List<String> messageAttributeNames = new ArrayList<>(receiveMessageRequest.messageAttributeNames());
+        messageAttributeNames.removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+        messageAttributeNames.addAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+        receiveMessageRequestBuilder.messageAttributeNames(messageAttributeNames);
+        String queueUrl = receiveMessageRequest.queueUrl();
+        receiveMessageRequest = receiveMessageRequestBuilder.build();
+
+        return super.receiveMessage(receiveMessageRequest)
+            .thenCompose(receiveMessageResponse -> {
+                List<Message> messages = receiveMessageResponse.messages();
+
+                // Check for no messages. If so, no need to process further.
+                if (messages.isEmpty()) {
+                    return CompletableFuture.completedFuture(new ArrayList<StreamMessage>());
+                }
+
+                List<CompletableFuture<StreamMessage>> streamMessageFutures = new ArrayList<>(messages.size());
+                for (Message message : messages) {
+                    // For each received message check if they are stored in S3.
+                    Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(
+                        message.messageAttributes());
+                    if (!largePayloadAttributeName.isPresent()) {
+                        // Not S3 - create StreamMessage without stream
+                        streamMessageFutures.add(CompletableFuture.completedFuture(new StreamMessage(message, null)));
+                    } else {
+                        // In S3 - get streaming access to payload
+                        final String largeMessagePointer = message.body()
+                            .replace("com.amazon.sqs.javamessaging.MessageS3Pointer",
+                                "software.amazon.payloadoffloading.PayloadS3Pointer");
+
+                        // Check if we have stream payload store for streaming
+                        if (payloadStore instanceof StreamPayloadStoreAsync) {
+                            StreamPayloadStoreAsync streamStore = (StreamPayloadStoreAsync) payloadStore;
+
+                            streamMessageFutures.add(streamStore.getOriginalPayloadStreamStream(largeMessagePointer)
+                                .handle((stream, throwable) -> {
+                                    if (throwable != null) {
+                                        if (clientConfiguration.ignoresPayloadNotFound()) {
+                                            DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+                                                .builder()
+                                                .queueUrl(queueUrl)
+                                                .receiptHandle(message.receiptHandle())
+                                                .build();
+
+                                            deleteMessage(deleteMessageRequest).join();
+                                            LOG.warn("Message deleted from SQS since payload with pointer could not be found in S3.");
+                                            return null;
+                                        } else {
+                                            throw new CompletionException(throwable);
+                                        }
+                                    }
+
+                                    Message.Builder messageBuilder = message.toBuilder();
+                                    // Remove the additional attribute before returning the message
+                                    Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(
+                                        message.messageAttributes());
+                                    messageAttributes.keySet().removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+                                    messageBuilder.messageAttributes(messageAttributes);
+
+                                    // Embed s3 object pointer in the receipt handle.
+                                    String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
+                                        message.receiptHandle(),
+                                        largeMessagePointer);
+                                    messageBuilder.receiptHandle(modifiedReceiptHandle);
+
+                                    return new StreamMessage(messageBuilder.build(), stream);
+                                }));
+                        } else {
+                            // Fall back to regular payload retrieval if no streaming support
+                            streamMessageFutures.add(payloadStore.getOriginalPayload(largeMessagePointer)
+                                .handle((originalPayload, throwable) -> {
+                                    if (throwable != null) {
+                                        if (clientConfiguration.ignoresPayloadNotFound()) {
+                                            DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+                                                .builder()
+                                                .queueUrl(queueUrl)
+                                                .receiptHandle(message.receiptHandle())
+                                                .build();
+
+                                            deleteMessage(deleteMessageRequest).join();
+                                            LOG.warn("Message deleted from SQS since payload with pointer could not be found in S3.");
+                                            return null;
+                                        } else {
+                                            throw new CompletionException(throwable);
+                                        }
+                                    }
+
+                                    // Set original payload and create StreamMessage without stream
+                                    Message.Builder messageBuilder = message.toBuilder();
+                                    messageBuilder.body(originalPayload);
+
+                                    // Remove the additional attribute before returning the message
+                                    Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(
+                                        message.messageAttributes());
+                                    messageAttributes.keySet().removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+                                    messageBuilder.messageAttributes(messageAttributes);
+
+                                    // Embed s3 object pointer in the receipt handle.
+                                    String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
+                                        message.receiptHandle(),
+                                        largeMessagePointer);
+                                    messageBuilder.receiptHandle(modifiedReceiptHandle);
+
+                                    return new StreamMessage(messageBuilder.build(), null);
+                                }));
+                        }
+                    }
+                }
+
+                // Convert list of stream message futures to a future list of stream messages.
+                return CompletableFuture.allOf(
+                        streamMessageFutures.toArray(new CompletableFuture[streamMessageFutures.size()]))
+                    .thenApply(v -> streamMessageFutures.stream()
+                        .map(CompletableFuture::join)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList()));
+            })
+            .thenApply(streamMessages -> new ReceiveStreamMessageResponse(streamMessages));
     }
 
     /**
@@ -444,6 +604,69 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
     }
 
     /**
+     * <p>
+     * Delivers a message to the specified queue using an InputStream for the message body.
+     * This method allows sending large messages without loading them entirely into memory.
+     * </p>
+     *
+     * @param sendMessageRequest The send message request with message body as InputStream
+     * @param messageBodyStream InputStream containing the message body content
+     * @param contentLength The total length of the content in the stream
+     * @return CompletableFuture of the SendMessage operation returned by the service.
+     */
+    public CompletableFuture<SendMessageResponse> sendStreamMessage(SendMessageRequest sendMessageRequest,
+                                                                     InputStream messageBodyStream,
+                                                                     long contentLength) {
+        if (sendMessageRequest == null) {
+            String errorMessage = "sendMessageRequest cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
+        sendMessageRequest = appendUserAgent(sendMessageRequestBuilder).build();
+
+        if (!clientConfiguration.isPayloadSupportEnabled()) {
+            // Convert stream to string for non-extended client
+            try {
+                String messageBody = IoUtils.toUtf8String(messageBodyStream);
+                SendMessageRequest finalRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
+                return super.sendMessage(finalRequest);
+            } catch (IOException e) {
+                CompletableFuture<SendMessageResponse> failedFuture = new CompletableFuture<>();
+                failedFuture.completeExceptionally(new RuntimeException("Failed to read from InputStream", e));
+                return failedFuture;
+            }
+        }
+
+        if (messageBodyStream == null) {
+            String errorMessage = "messageBodyStream cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        //Check message attributes for ExtendedClient related constraints
+        checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest.messageAttributes());
+
+        if (clientConfiguration.isAlwaysThroughS3()
+            || contentLength >= clientConfiguration.getPayloadSizeThreshold()) {
+            return storeStreamMessageInS3(sendMessageRequest, messageBodyStream, contentLength)
+                .thenCompose(modifiedRequest -> super.sendMessage(modifiedRequest));
+        } else {
+            // Convert stream to string for small messages
+            try {
+                String messageBody = IoUtils.toUtf8String(messageBodyStream);
+                SendMessageRequest finalRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
+                return super.sendMessage(finalRequest);
+            } catch (IOException e) {
+                CompletableFuture<SendMessageResponse> failedFuture = new CompletableFuture<>();
+                failedFuture.completeExceptionally(new RuntimeException("Failed to read from InputStream", e));
+                return failedFuture;
+            }
+        }
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -528,6 +751,58 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
             return payloadStore.storeOriginalPayload(messageContentStr);
         }
         return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
+    }
+
+
+    private CompletableFuture<SendMessageRequest> storeStreamMessageInS3(SendMessageRequest sendMessageRequest, InputStream messageBodyStream, long contentLength) {
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
+
+        sendMessageRequestBuilder.messageAttributes(
+            updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), contentLength,
+                clientConfiguration.usesLegacyReservedAttributeName()));
+
+        // Store the message content in S3.
+        return storeOriginalPayload(messageBodyStream)
+            .thenApply(largeMessagePointer -> {
+                sendMessageRequestBuilder.messageBody(largeMessagePointer);
+                return sendMessageRequestBuilder.build();
+            });
+    }
+
+    private CompletableFuture<String> storeOriginalPayload(InputStream messageContentStream) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        String key = StringUtils.isBlank(s3KeyPrefix) ? UUID.randomUUID().toString() : s3KeyPrefix + UUID.randomUUID();
+        
+        if (payloadStore instanceof StreamPayloadStoreAsync) {
+            return ((StreamPayloadStoreAsync) payloadStore)
+                .storeOriginalPayloadStream(messageContentStream, key)
+                .exceptionally(ex -> {
+                    LOG.warn("Stream upload attempt failed; falling back to standard single-part upload.");
+                    try {
+                        messageContentStream.reset();
+                    } catch (Exception resetEx) {
+                        LOG.warn("Failed to reset stream after multipart upload failure, stream may be exhausted", resetEx);
+                        throw new RuntimeException("Stream upload failed and stream cannot be reset", ex);
+                    }
+                    // Fall back to reading the stream and using string method
+                    try {
+                        String content = IoUtils.toUtf8String(messageContentStream);
+                        return payloadStore.storeOriginalPayload(content, key).join();
+                    } catch (IOException ioEx) {
+                        throw new RuntimeException("Failed to read from InputStream", ioEx);
+                    }
+                });
+        }
+        
+        // Fall back to reading the stream and using string method
+        try {
+            String content = IoUtils.toUtf8String(messageContentStream);
+            return payloadStore.storeOriginalPayload(content, key);
+        } catch (IOException e) {
+            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(new RuntimeException("Failed to read from InputStream", e));
+            return failedFuture;
+        }
     }
 
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {

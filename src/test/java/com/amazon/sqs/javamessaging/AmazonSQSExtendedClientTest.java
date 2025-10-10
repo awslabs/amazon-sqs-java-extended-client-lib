@@ -68,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,6 +82,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayInputStream;
+
 
 /**
  * Tests the AmazonSQSExtendedClient class.
@@ -113,6 +120,13 @@ public class AmazonSQSExtendedClientTest {
 
     // should be > 1 and << SQS_SIZE_LIMIT
     private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
+    
+    // Stream upload thresholds
+    private static final int STREAM_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
+    private static final int MORE_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD + 1;
+    
+    // Stream part size
+    private static final int STREAM_UPLOAD_PART_SIZE = 5 * 1024 * 1024; // 5MB
 
     @BeforeEach
     public void setupClients() {
@@ -777,4 +791,204 @@ public class AmazonSQSExtendedClientTest {
     private String getSampleLargeReceiptHandle(String originalReceiptHandle) {
         return getLargeReceiptHandle(UUID.randomUUID().toString(), originalReceiptHandle);
     }
+
+    @Test
+    public void testReceiveMessageAsStream_LargeMessage_WithStreamStore_ReturnsMessageWithStream() throws IOException {
+        String largeMessageBody = generateStringWithLength(MORE_THAN_STREAM_THRESHOLD);
+        
+        ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
+        when(mockStream.read(any(byte[].class))).thenReturn(-1); 
+        when(mockS3.getObject(isA(GetObjectRequest.class))).thenReturn(mockStream);
+        
+        String s3Key = "stream-key-" + UUID.randomUUID();
+        String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, s3Key).toJson();
+        Message sqsMessage = Message.builder()
+            .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, 
+                MessageAttributeValue.builder().dataType("Number").stringValue(String.valueOf(largeMessageBody.length())).build()))
+            .body(pointer)
+            .receiptHandle("test-receipt-handle")
+            .build();
+        
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class)))
+            .thenReturn(ReceiveMessageResponse.builder().messages(sqsMessage).build());
+        
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadPartSize(STREAM_UPLOAD_PART_SIZE)
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD);
+        AmazonSQSExtendedClient sqsExtended = new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration);
+        
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();
+        ReceiveStreamMessageResponse response = sqsExtended.receiveMessageAsStream(request);
+        sqsExtended.close();
+        
+        assertEquals(1, response.streamMessages().size());
+        StreamMessage streamMessage = response.streamMessages().get(0);
+        
+        assertTrue(streamMessage.hasStreamPayload());
+        
+        ResponseInputStream<GetObjectResponse> payloadStream = streamMessage.getPayloadStream();
+        assertNotNull(payloadStream);
+        
+        verify(mockS3, times(1)).getObject(isA(GetObjectRequest.class));
+        assertEquals("-..s3BucketName..-test-bucket-name-..s3BucketName..--..s3Key..-stream-key-test-s3-key-uuid-..s3Key..-test-receipt-handle", streamMessage.getMessage().receiptHandle());
+    }
+
+    @Test
+    public void testSendStreamMessage_LargeFileUpload_StoresInS3AndSendsPointer() {
+        int fileSizeBytes = MORE_THAN_STREAM_THRESHOLD; 
+        String fileContent = generateStringWithLength(fileSizeBytes);
+        InputStream fileStream = new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
+        
+        ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD);
+        
+        SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "fileName", MessageAttributeValue.builder().stringValue("largefile.json").dataType("String").build(),
+                "contentType", MessageAttributeValue.builder().stringValue("application/json").dataType("String").build()
+            ))
+            .build();
+
+        ((AmazonSQSExtendedClient) streamClient).sendStreamMessage(request, fileStream, fileSizeBytes);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        
+        assertTrue(sqsCaptor.getValue().messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("fileName"));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("contentType"));
+        assertTrue(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertEquals(String.valueOf(fileSizeBytes), 
+            sqsCaptor.getValue().messageAttributes()
+                .get(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME).stringValue());
+    }
+
+    @Test
+    public void testSendStreamMessage_SmallPayload_SendsDirectlyWithoutS3() {
+        String smallMessage = "Small notification message";
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(smallMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "messageType", MessageAttributeValue.builder().stringValue("notification").dataType("String").build()
+            ))
+            .build();
+
+        ((AmazonSQSExtendedClient) extendedSqsWithDefaultConfig).sendStreamMessage(request, stream, smallMessage.length());
+
+        verify(mockS3, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        assertEquals(smallMessage, sqsCaptor.getValue().messageBody());
+        assertFalse(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+    }
+
+    @Test
+    public void testSendStreamMessage_WithS3KeyPrefix() {
+        int dataSize = MORE_THAN_SQS_SIZE_LIMIT;
+        String largeData = generateStringWithLength(dataSize);
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(largeData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        ((AmazonSQSExtendedClient) extendedSqsWithS3KeyPrefix).sendStreamMessage(request, stream, dataSize);
+        ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(s3Captor.capture(), any(RequestBody.class));
+        assertTrue(s3Captor.getValue().key().startsWith(S3_KEY_PREFIX), 
+            "S3 key should start with prefix: " + S3_KEY_PREFIX);
+    }
+
+    @Test
+    public void testSendStreamMessageBatch_MixedSizes_OnlyLargeMessagesUseS3() {
+        ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD); // 5MB
+        
+        SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
+        
+        List<SendMessageBatchRequestEntry> entries = new ArrayList<>();
+        List<InputStream> streams = new ArrayList<>();
+        List<Long> contentLengths = new ArrayList<>();
+        
+        // Small message (100KB - below SQS limit)
+        String smallMsg = generateStringWithLength(100_000);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg1")
+            .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("small").dataType("String").build()))
+            .build());
+        streams.add(new ByteArrayInputStream(smallMsg.getBytes(StandardCharsets.UTF_8)));
+        contentLengths.add((long) smallMsg.length());
+        
+        // Large message (300KB - above SQS limit but below stream threshold)
+        String largeMsg = generateStringWithLength(300_000);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg2")
+            .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("large").dataType("String").build()))
+            .build());
+        streams.add(new java.io.ByteArrayInputStream(largeMsg.getBytes(StandardCharsets.UTF_8)));
+        contentLengths.add((long) largeMsg.length());
+        
+        // Very large message (6MB - above stream threshold, uses multipart)
+        String veryLargeMsg = generateStringWithLength(MORE_THAN_STREAM_THRESHOLD);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg3")
+            .build());
+        streams.add(new java.io.ByteArrayInputStream(veryLargeMsg.getBytes(StandardCharsets.UTF_8)));
+        contentLengths.add((long) veryLargeMsg.length());
+        
+        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .entries(entries)
+            .build();
+
+        ((AmazonSQSExtendedClient) streamClient).sendStreamMessageBatch(batchRequest, streams, contentLengths);
+
+        ArgumentCaptor<SendMessageBatchRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageBatchRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessageBatch(sqsCaptor.capture());
+        SendMessageBatchRequestEntry firstEntry = sqsCaptor.getValue().entries().get(0);
+        assertEquals(smallMsg, firstEntry.messageBody());
+        SendMessageBatchRequestEntry secondEntry = sqsCaptor.getValue().entries().get(1);
+        assertTrue(secondEntry.messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(secondEntry.messageAttributes().containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertTrue(secondEntry.messageAttributes().containsKey("size"));
+        assertEquals("large", secondEntry.messageAttributes().get("size").stringValue());
+        SendMessageBatchRequestEntry thirdEntry = sqsCaptor.getValue().entries().get(2);
+        assertTrue(thirdEntry.messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(thirdEntry.messageAttributes().containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+    }
+
+    @Test
+    public void testSendStreamMessage_WithEncryption_AppliesKMSToS3Upload() {
+        int dataSize = MORE_THAN_SQS_SIZE_LIMIT;
+        String sensitiveData = generateStringWithLength(dataSize);
+        InputStream stream = new ByteArrayInputStream(sensitiveData.getBytes(StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "dataType", MessageAttributeValue.builder().stringValue("sensitive").dataType("String").build()
+            ))
+            .build();
+
+        ((AmazonSQSExtendedClient) extendedSqsWithCustomKMS).sendStreamMessage(request, stream, dataSize);
+
+        ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(s3Captor.capture(), any(RequestBody.class));
+        assertEquals(S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID, s3Captor.getValue().ssekmsKeyId());
+        verify(mockSqsBackend, times(1)).sendMessage(any(SendMessageRequest.class));
+    }
+
 }

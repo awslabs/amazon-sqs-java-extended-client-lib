@@ -6,9 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doThrow;
@@ -20,6 +23,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,6 +43,7 @@ import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -63,10 +69,14 @@ import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
-import software.amazon.awssdk.utils.ImmutableMap;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.payloadoffloading.StreamPayloadStoreAsync;
+import software.amazon.payloadoffloading.PayloadStoreAsync;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 import software.amazon.payloadoffloading.ServerSideEncryptionFactory;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
+import software.amazon.awssdk.utils.ImmutableMap;
 
 public class AmazonSQSExtendedAsyncClientTest {
 
@@ -88,6 +98,11 @@ public class AmazonSQSExtendedAsyncClientTest {
 
     // should be > 1 and << SQS_SIZE_LIMIT
     private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
+    
+    // Stream upload thresholds
+    private static final int STREAM_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
+    private static final int LESS_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD - 1;
+    private static final int MORE_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD + 1;
 
     @BeforeEach
     public void setupClients() {
@@ -729,4 +744,338 @@ public class AmazonSQSExtendedAsyncClientTest {
         Arrays.fill(charArray, 'x');
         return new String(charArray);
     }
+
+    @Test
+    public void testReceiveMessageAsStream_PayloadSupportDisabled_ReturnsMessagesWithoutStreams() {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportDisabled();
+        AmazonSQSExtendedAsyncClient clientWithDisabledPayload = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        Message message = Message.builder()
+            .messageId("msg1")
+            .body("small message")
+            .receiptHandle("receipt1")
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(message)
+            .build();
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        CompletableFuture<ReceiveStreamMessageResponse> future = clientWithDisabledPayload.receiveMessageAsStream(request);
+        ReceiveStreamMessageResponse response = future.join();
+
+        assertEquals(1, response.streamMessages().size());
+        StreamMessage streamMessage = response.streamMessages().get(0);
+        assertEquals("msg1", streamMessage.getMessage().messageId());
+        assertEquals("small message", streamMessage.getMessage().body());
+        assertFalse(streamMessage.hasStreamPayload());
+    }
+
+    @Test
+    public void testReceiveMessageAsStream_LargeMessage_WithStreamStore_ReturnsMessageWithStream() throws IOException {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withPayloadSizeThreshold(262144); // 256KB
+        config.setStreamUploadEnabled(true);
+
+        AmazonSQSExtendedAsyncClient clientWithStream = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        String s3Pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "test-key").toJson();
+        Message message = Message.builder()
+            .messageId("msg1")
+            .body(s3Pointer)
+            .receiptHandle("receipt1")
+            .messageAttributes(ImmutableMap.of(
+                "ExtendedPayloadSize", MessageAttributeValue.builder().stringValue("300000").dataType("Number").build()
+            ))
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(message)
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
+        when(mockStream.read(any(byte[].class))).thenReturn(-1);
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        @SuppressWarnings("unchecked")
+        CompletableFuture<ResponseInputStream<GetObjectResponse>> futureStream = CompletableFuture.completedFuture(mockStream);
+        when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
+            .thenReturn(futureStream);
+
+        CompletableFuture<ReceiveStreamMessageResponse> future = clientWithStream.receiveMessageAsStream(request);
+        ReceiveStreamMessageResponse response = future.join();
+
+        assertEquals(1, response.streamMessages().size());
+        StreamMessage streamMessage = response.streamMessages().get(0);
+        assertEquals("msg1", streamMessage.getMessage().messageId());
+        assertTrue(streamMessage.hasStreamPayload());
+        assertSame(mockStream, streamMessage.getPayloadStream());
+        assertTrue(streamMessage.getMessage().receiptHandle().contains("test-key"));
+    }
+
+    @Test
+    public void testReceiveMessageAsStream_LargeMessage_WithoutStreamStore_FallsBackToRegularRetrieval() {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
+
+        AmazonSQSExtendedAsyncClient clientWithRegularStore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        String s3Pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "test-key").toJson();
+        Message message = Message.builder()
+            .messageId("msg1")
+            .body(s3Pointer)
+            .receiptHandle("receipt1")
+            .messageAttributes(ImmutableMap.of(
+                "ExtendedPayloadSize", MessageAttributeValue.builder().stringValue("300000").dataType("Number").build()
+            ))
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(message)
+            .build();
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        ResponseBytes<GetObjectResponse> s3Object = ResponseBytes.fromByteArray(
+            GetObjectResponse.builder().build(),
+            "large payload content".getBytes(StandardCharsets.UTF_8));
+        when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
+            .thenReturn(CompletableFuture.completedFuture(s3Object));
+
+        CompletableFuture<ReceiveStreamMessageResponse> future = clientWithRegularStore.receiveMessageAsStream(request);
+        ReceiveStreamMessageResponse response = future.join();
+
+        assertEquals(1, response.streamMessages().size());
+        StreamMessage streamMessage = response.streamMessages().get(0);
+        assertEquals("msg1", streamMessage.getMessage().messageId());
+        assertEquals("large payload content", streamMessage.getMessage().body());
+        assertFalse(streamMessage.hasStreamPayload()); 
+    }
+
+    @Test
+    public void testReceiveMessageAsStream_StreamRetrievalFails_IgnoreNotFoundEnabled_DeletesMessage() {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withIgnorePayloadNotFound(true);
+
+        AmazonSQSExtendedAsyncClient clientWithIgnore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        String s3Pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "test-key").toJson();
+        Message message = Message.builder()
+            .messageId("msg1")
+            .body(s3Pointer)
+            .receiptHandle("receipt1")
+            .messageAttributes(ImmutableMap.of(
+                "ExtendedPayloadSize", MessageAttributeValue.builder().stringValue("300000").dataType("Number").build()
+            ))
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(message)
+            .build();
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        CompletableFuture<ResponseInputStream<GetObjectResponse>> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(NoSuchKeyException.builder().build());
+        when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
+            .thenReturn(failedFuture);
+
+        when(mockSqsBackend.deleteMessage(any(DeleteMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(DeleteMessageResponse.builder().build()));
+
+        CompletableFuture<ReceiveStreamMessageResponse> future = clientWithIgnore.receiveMessageAsStream(request);
+        ReceiveStreamMessageResponse response = future.join();
+
+        assertTrue(response.streamMessages().isEmpty()); 
+
+        ArgumentCaptor<DeleteMessageRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(mockSqsBackend).deleteMessage(deleteCaptor.capture());
+        assertEquals("receipt1", deleteCaptor.getValue().receiptHandle());
+    }
+
+    @Test
+    public void testReceiveMessageAsStream_StreamRetrievalFails_IgnoreNotFoundDisabled_ThrowsException() {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withIgnorePayloadNotFound(false);
+
+        AmazonSQSExtendedAsyncClient clientWithIgnore = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        String s3Pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "test-key").toJson();
+        Message message = Message.builder()
+            .messageId("msg1")
+            .body(s3Pointer)
+            .receiptHandle("receipt1")
+            .messageAttributes(ImmutableMap.of(
+                "ExtendedPayloadSize", MessageAttributeValue.builder().stringValue("300000").dataType("Number").build()
+            ))
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(message)
+            .build();
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        CompletableFuture<ResponseInputStream<GetObjectResponse>> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(NoSuchKeyException.builder().build());
+        when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
+            .thenReturn(failedFuture);
+
+        assertThrows(CompletionException.class, () -> {
+            clientWithIgnore.receiveMessageAsStream(request).join();
+        });
+    }
+
+    @Test
+    public void testReceiveMessageAsStream_MultipleMessages_MixedTypes() throws IOException {
+        ExtendedAsyncClientConfiguration config = new ExtendedAsyncClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withPayloadSizeThreshold(262144); // 256KB
+        config.setStreamUploadEnabled(true); // Enable stream uploads
+
+        AmazonSQSExtendedAsyncClient clientWithStream = new AmazonSQSExtendedAsyncClient(mockSqsBackend, config);
+
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
+
+        // Small message (no S3)
+        Message smallMessage = Message.builder()
+            .messageId("msg1")
+            .body("small message")
+            .receiptHandle("receipt1")
+            .build();
+
+        // Large message (with S3 pointer)
+        String s3Pointer = new PayloadS3Pointer(S3_BUCKET_NAME, "test-key").toJson();
+        Message largeMessage = Message.builder()
+            .messageId("msg2")
+            .body(s3Pointer)
+            .receiptHandle("receipt2")
+            .messageAttributes(ImmutableMap.of(
+                "ExtendedPayloadSize", MessageAttributeValue.builder().stringValue("300000").dataType("Number").build()
+            ))
+            .build();
+
+        ReceiveMessageResponse sqsResponse = ReceiveMessageResponse.builder()
+            .messages(Arrays.asList(smallMessage, largeMessage))
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
+        when(mockStream.read(any(byte[].class))).thenReturn(-1);
+
+        when(mockSqsBackend.receiveMessage(any(ReceiveMessageRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(sqsResponse));
+
+        @SuppressWarnings("unchecked")
+        CompletableFuture<ResponseInputStream<GetObjectResponse>> futureStream = CompletableFuture.completedFuture(mockStream);
+        when(mockS3.getObject(any(GetObjectRequest.class), any(AsyncResponseTransformer.class)))
+            .thenReturn(futureStream);
+
+        CompletableFuture<ReceiveStreamMessageResponse> future = clientWithStream.receiveMessageAsStream(request);
+        ReceiveStreamMessageResponse response = future.join();
+
+        assertEquals(2, response.streamMessages().size());
+
+        StreamMessage msg1 = response.streamMessages().get(0);
+        assertEquals("msg1", msg1.getMessage().messageId());
+        assertFalse(msg1.hasStreamPayload());
+
+        StreamMessage msg2 = response.streamMessages().get(1);
+        assertEquals("msg2", msg2.getMessage().messageId());
+        assertTrue(msg2.hasStreamPayload());
+        assertSame(mockStream, msg2.getPayloadStream());
+    }
+
+    @Test
+    public void testSendStreamMessage_LargeFileUpload_StoresInS3AndSendsPointer() {
+        int fileSizeBytes = 500_000;
+        String fileContent = generateStringWithLength(fileSizeBytes);
+        java.io.InputStream fileStream = new java.io.ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "fileName", MessageAttributeValue.builder().stringValue("largefile.json").dataType("String").build(),
+                "contentType", MessageAttributeValue.builder().stringValue("application/json").dataType("String").build()
+            ))
+            .build();
+
+        ((AmazonSQSExtendedAsyncClient) extendedSqsWithDefaultConfig)
+            .sendStreamMessage(request, fileStream, fileSizeBytes).join();
+
+        ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(s3Captor.capture(), any(AsyncRequestBody.class));
+        assertEquals(S3_BUCKET_NAME, s3Captor.getValue().bucket());
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        
+        assertTrue(sqsCaptor.getValue().messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("fileName"));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("contentType"));
+        assertTrue(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertEquals(String.valueOf(fileSizeBytes), 
+            sqsCaptor.getValue().messageAttributes()
+                .get(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME).stringValue());
+    }
+
+    @Test
+    public void testSendStreamMessage_SmallPayload_SendsDirectlyWithoutS3() {
+        String smallMessage = "Small notification message";
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(smallMessage.getBytes(StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "messageType", MessageAttributeValue.builder().stringValue("notification").dataType("String").build()
+            ))
+            .build();
+
+        ((AmazonSQSExtendedAsyncClient) extendedSqsWithDefaultConfig)
+            .sendStreamMessage(request, stream, smallMessage.length()).join();
+
+        verify(mockS3, never()).putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class));
+        
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        assertEquals(smallMessage, sqsCaptor.getValue().messageBody());
+        
+        assertFalse(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+    }
 }
+
