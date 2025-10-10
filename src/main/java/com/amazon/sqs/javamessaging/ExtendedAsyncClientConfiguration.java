@@ -212,4 +212,10 @@ public class ExtendedAsyncClientConfiguration extends PayloadStorageAsyncConfigu
         this.setServerSideEncryptionStrategy(serverSideEncryption);
         return this;
     }
+
+    @Override
+    public ExtendedAsyncClientConfiguration withStreamUploadEnabled(boolean enabled) {
+        setStreamUploadEnabled(enabled);
+        return this;
+    }
 }

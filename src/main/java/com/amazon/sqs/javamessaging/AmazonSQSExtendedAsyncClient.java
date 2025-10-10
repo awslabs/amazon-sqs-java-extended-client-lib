@@ -134,8 +134,8 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
         super(sqsClient);
         this.clientConfiguration = new ExtendedAsyncClientConfiguration(extendedClientConfig);
         S3AsyncDao s3Dao = new S3AsyncDao(clientConfiguration.getS3AsyncClient(),
-                                             clientConfiguration.getServerSideEncryptionStrategy(),
-                                             clientConfiguration.getObjectCannedACL());
+            clientConfiguration.getServerSideEncryptionStrategy(),
+            clientConfiguration.getObjectCannedACL());
 
         if (clientConfiguration.isStreamUploadEnabled()) {
             this.payloadStore = new S3BackedStreamPayloadStoreAsync(s3Dao, clientConfiguration.getS3BucketName());
