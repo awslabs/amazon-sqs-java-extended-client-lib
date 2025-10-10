@@ -165,11 +165,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
                         .minimumPartSizeInBytes(clientConfiguration.getStreamUploadPartSize())
                         .thresholdInBytes(clientConfiguration.getStreamUploadThreshold())
                 )
-                // .credentialsProvider(DefaultCredentialsProvider.create())
-                .endpointOverride(URI.create("http://localhost:4566"))
-                .forcePathStyle(true)
-                .credentialsProvider(StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create("dummy", "dummy")))
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .region(Region.of(clientConfiguration.getS3Region()))
                 .build();
 
