@@ -15,13 +15,45 @@
 
 package com.amazon.sqs.javamessaging;
 
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
 import static com.amazon.sqs.javamessaging.StringTestUtil.generateStringWithLength;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
+
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -51,37 +83,6 @@ import software.amazon.awssdk.utils.StringInputStream;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 import software.amazon.payloadoffloading.ServerSideEncryptionFactory;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
-import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.isA;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 /**
  * Tests the AmazonSQSExtendedClient class.
@@ -115,10 +116,13 @@ public class AmazonSQSExtendedClientTest {
     // should be > 1 and << SQS_SIZE_LIMIT
     private static final int ARBITRARY_SMALLER_THRESHOLD = 500;
     
-    // Multipart upload thresholds
-    private static final int MULTIPART_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
-    private static final int LESS_THAN_MULTIPART_THRESHOLD = MULTIPART_UPLOAD_THRESHOLD - 1;
-    private static final int MORE_THAN_MULTIPART_THRESHOLD = MULTIPART_UPLOAD_THRESHOLD + 1;
+    // Stream upload thresholds
+    private static final int STREAM_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB default
+    private static final int LESS_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD - 1;
+    private static final int MORE_THAN_STREAM_THRESHOLD = STREAM_UPLOAD_THRESHOLD + 1;
+    
+    // Stream part size
+    private static final int STREAM_UPLOAD_PART_SIZE = 5 * 1024 * 1024; // 5MB
 
     @BeforeEach
     public void setupClients() {
@@ -785,193 +789,216 @@ public class AmazonSQSExtendedClientTest {
     }
 
     @Test
-    public void testWhenMultipartUploadDisabledThenStandardUploadIsUsed() {
-        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(false);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
-    }
-
-    @Test
-    public void testWhenMultipartUploadEnabledAndMessageBelowThresholdThenStandardUploadIsUsed() {
-        String messageBody = generateStringWithLength(LESS_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
-    }
-
-    @Test
-    public void testWhenMultipartUploadEnabledAndMessageAboveThresholdThenMultipartIsAttempted() {
-        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
-    }
-
-    @Test
-    public void testWhenMultipartUploadEnabledWithCustomThresholdThenThresholdIsHonored() {
-        int customThreshold = 1024 * 1024;
-        int messageLength = customThreshold + 1000;
-        String messageBody = generateStringWithLength(messageLength);
+    public void testReceiveMessageAsStream_LargeMessage_WithStreamStore_ReturnsMessageWithStream() throws IOException {
+        String largeMessageBody = generateStringWithLength(MORE_THAN_STREAM_THRESHOLD);
+        
+        ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
+        when(mockStream.read(any(byte[].class))).thenReturn(-1); 
+        when(mockS3.getObject(isA(GetObjectRequest.class))).thenReturn(mockStream);
+        
+        String s3Key = "stream-key-" + UUID.randomUUID();
+        String pointer = new PayloadS3Pointer(S3_BUCKET_NAME, s3Key).toJson();
+        Message sqsMessage = Message.builder()
+            .messageAttributes(ImmutableMap.of(SQSExtendedClientConstants.RESERVED_ATTRIBUTE_NAME, 
+                MessageAttributeValue.builder().dataType("Number").stringValue(String.valueOf(largeMessageBody.length())).build()))
+            .body(pointer)
+            .receiptHandle("test-receipt-handle")
+            .build();
+        
+        when(mockSqsBackend.receiveMessage(isA(ReceiveMessageRequest.class)))
+            .thenReturn(ReceiveMessageResponse.builder().messages(sqsMessage).build());
         
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(customThreshold);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadPartSize(STREAM_UPLOAD_PART_SIZE)
+            .withS3Region("ap-south-1")
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD);
+        AmazonSQSExtendedClient sqsExtended = new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration);
+        
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder().queueUrl(SQS_QUEUE_URL).build();
+        ReceiveStreamMessageResponse response = sqsExtended.receiveMessageAsStream(request);
+        sqsExtended.close();
+        
+        assertEquals(1, response.streamMessages().size());
+        StreamMessage streamMessage = response.streamMessages().get(0);
+        
+        assertTrue(streamMessage.hasStreamPayload());
+        
+        ResponseInputStream<GetObjectResponse> payloadStream = streamMessage.getPayloadStream();
+        assertNotNull(payloadStream);
+        
+        verify(mockS3, times(1)).getObject(isA(GetObjectRequest.class));
+        assertEquals("-..s3BucketName..-test-bucket-name-..s3BucketName..--..s3Key..-stream-key-test-s3-key-uuid-..s3Key..-test-receipt-handle", streamMessage.getMessage().receiptHandle());
     }
 
     @Test
-    public void testWhenMultipartUploadEnabledWithAlwaysThroughS3ThenSmallMessagesAlsoUseS3() {
-        String messageBody = generateStringWithLength(LESS_THAN_SQS_SIZE_LIMIT);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD)
-                .withAlwaysThroughS3(true);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+    public void testSendStreamMessage_LargeFileUpload_StoresInS3AndSendsPointer() {
+        // Use case: Uploading a large file (e.g., 6MB) via stream to avoid loading in memory
+        // Also tests StreamPayloadStore multipart upload path when stream upload is enabled
+        int fileSizeBytes = MORE_THAN_STREAM_THRESHOLD; // 6MB - above stream threshold
+        String fileContent = generateStringWithLength(fileSizeBytes);
+        java.io.InputStream fileStream = new java.io.ByteArrayInputStream(fileContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        // Create client with stream upload enabled to test StreamPayloadStore path
+        ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD)
+            .withS3Region("us-east-1");
+        
+        SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "fileName", MessageAttributeValue.builder().stringValue("largefile.json").dataType("String").build(),
+                "contentType", MessageAttributeValue.builder().stringValue("application/json").dataType("String").build()
+            ))
+            .build();
 
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
+        ((AmazonSQSExtendedClient) streamClient).sendStreamMessage(request, fileStream, fileSizeBytes);
 
-        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        
+        assertTrue(sqsCaptor.getValue().messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("fileName"));
+        assertTrue(sqsCaptor.getValue().messageAttributes().containsKey("contentType"));
+        assertTrue(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertEquals(String.valueOf(fileSizeBytes), 
+            sqsCaptor.getValue().messageAttributes()
+                .get(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME).stringValue());
     }
 
     @Test
-    public void testWhenMultipartUploadEnabledWithS3KeyPrefixThenPrefixIsUsed() {
-        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD)
-                .withS3KeyPrefix(S3_KEY_PREFIX);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+    public void testSendStreamMessage_SmallPayload_SendsDirectlyWithoutS3() {
+        String smallMessage = "Small notification message";
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(smallMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "messageType", MessageAttributeValue.builder().stringValue("notification").dataType("String").build()
+            ))
+            .build();
 
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
+        ((AmazonSQSExtendedClient) extendedSqsWithDefaultConfig).sendStreamMessage(request, stream, smallMessage.length());
 
-        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
+        verify(mockS3, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessage(sqsCaptor.capture());
+        assertEquals(smallMessage, sqsCaptor.getValue().messageBody());
+        assertFalse(sqsCaptor.getValue().messageAttributes()
+            .containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
     }
 
     @Test
-    public void testWhenMultipartUploadEnabledThenConfigurationWithCorrectThreshold() {
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
+    public void testSendStreamMessage_WithS3KeyPrefix() {
+        int dataSize = MORE_THAN_SQS_SIZE_LIMIT;
+        String largeData = generateStringWithLength(dataSize);
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(largeData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .build();
 
-        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
-        assertEquals(MULTIPART_UPLOAD_THRESHOLD, extendedClientConfiguration.getMultipartUploadThreshold());
+        ((AmazonSQSExtendedClient) extendedSqsWithS3KeyPrefix).sendStreamMessage(request, stream, dataSize);
+        ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(s3Captor.capture(), any(RequestBody.class));
+        assertTrue(s3Captor.getValue().key().startsWith(S3_KEY_PREFIX), 
+            "S3 key should start with prefix: " + S3_KEY_PREFIX);
     }
 
     @Test
-    public void testWhenMultipartUploadDisabledByDefaultThenStandardUploadIsUsed() {
-        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
+    public void testSendStreamMessageBatch_MixedSizes_OnlyLargeMessagesUseS3() {
+        // Use case: Batch with mixed sizes - small goes direct, large goes to S3
+        // Also tests StreamPayloadStore multipart upload path for very large messages
+        
+        // Create client with stream upload enabled to test StreamPayloadStore path
+        ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
+            .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
+            .withStreamUploadEnabled(true)
+            .withStreamUploadThreshold(STREAM_UPLOAD_THRESHOLD) // 5MB
+            .withS3Region("us-east-1");
+        
+        SqsClient streamClient = spy(new AmazonSQSExtendedClient(mockSqsBackend, streamConfig));
+        
+        List<SendMessageBatchRequestEntry> entries = new ArrayList<>();
+        List<InputStream> streams = new ArrayList<>();
+        List<Long> contentLengths = new ArrayList<>();
+        
+        // Small message (100KB - below SQS limit)
+        String smallMsg = generateStringWithLength(100_000);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg1")
+            .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("small").dataType("String").build()))
+            .build());
+        streams.add(new java.io.ByteArrayInputStream(smallMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        contentLengths.add((long) smallMsg.length());
+        
+        // Large message (300KB - above SQS limit but below stream threshold)
+        String largeMsg = generateStringWithLength(300_000);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg2")
+            .messageAttributes(ImmutableMap.of("size", MessageAttributeValue.builder().stringValue("large").dataType("String").build()))
+            .build());
+        streams.add(new java.io.ByteArrayInputStream(largeMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        contentLengths.add((long) largeMsg.length());
+        
+        // Very large message (6MB - above stream threshold, uses multipart)
+        String veryLargeMsg = generateStringWithLength(MORE_THAN_STREAM_THRESHOLD);
+        entries.add(SendMessageBatchRequestEntry.builder()
+            .id("msg3")
+            .build());
+        streams.add(new java.io.ByteArrayInputStream(veryLargeMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        contentLengths.add((long) veryLargeMsg.length());
+        
+        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .entries(entries)
+            .build();
 
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
+        ((AmazonSQSExtendedClient) streamClient).sendStreamMessageBatch(batchRequest, streams, contentLengths);
 
-        assertFalse(extendedClientConfiguration.isMultipartUploadEnabled());
-        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
+        // Verify 2 large messages stored in S3 (300KB and 6MB)
+        ArgumentCaptor<SendMessageBatchRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageBatchRequest.class);
+        verify(mockSqsBackend, times(1)).sendMessageBatch(sqsCaptor.capture());
+        SendMessageBatchRequestEntry firstEntry = sqsCaptor.getValue().entries().get(0);
+        assertEquals(smallMsg, firstEntry.messageBody());
+        SendMessageBatchRequestEntry secondEntry = sqsCaptor.getValue().entries().get(1);
+        assertTrue(secondEntry.messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(secondEntry.messageAttributes().containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
+        assertTrue(secondEntry.messageAttributes().containsKey("size"));
+        assertEquals("large", secondEntry.messageAttributes().get("size").stringValue());
+        SendMessageBatchRequestEntry thirdEntry = sqsCaptor.getValue().entries().get(2);
+        assertTrue(thirdEntry.messageBody().contains(S3_BUCKET_NAME));
+        assertTrue(thirdEntry.messageAttributes().containsKey(AmazonSQSExtendedClientUtil.LEGACY_RESERVED_ATTRIBUTE_NAME));
     }
 
     @Test
-    public void testWhenMultipartUploadEnabledWithMessageBatchThenLargeMessagesUseMultipart() {
-        int customThreshold = 500_000; // 500KB multipart threshold
+    public void testSendStreamMessage_WithEncryption_AppliesKMSToS3Upload() {
+        int dataSize = MORE_THAN_SQS_SIZE_LIMIT;
+        String sensitiveData = generateStringWithLength(dataSize);
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(sensitiveData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQS_QUEUE_URL)
+            .messageAttributes(ImmutableMap.of(
+                "dataType", MessageAttributeValue.builder().stringValue("sensitive").dataType("String").build()
+            ))
+            .build();
 
-        // 3 messages above SQS size limit (256KB) will be stored in S3:
-        // - 300K uses standard S3 upload
-        // - 600K and 700K use multipart upload (above 500K threshold)
-        int[] messageLengthForCounter = new int[] {
-                100_000,   
-                200_000,   
-                300_000,  
-                600_000,  
-                700_000   
-        };
+        ((AmazonSQSExtendedClient) extendedSqsWithCustomKMS).sendStreamMessage(request, stream, dataSize);
 
-        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>();
-        for (int i = 0; i < messageLengthForCounter.length; i++) {
-            int messageLength = messageLengthForCounter[i];
-            String messageBody = generateStringWithLength(messageLength);
-            SendMessageBatchRequestEntry entry = SendMessageBatchRequestEntry.builder()
-                .id("entry_" + i)
-                .messageBody(messageBody)
-                .build();
-            batchEntries.add(entry);
-        }
-
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(customThreshold);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder().queueUrl(SQS_QUEUE_URL).entries(batchEntries).build();
-        sqsExtended.sendMessageBatch(batchRequest);
-
-        verify(mockS3, times(3)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
-        verify(mockSqsBackend, times(1)).sendMessageBatch(isA(SendMessageBatchRequest.class));
-    }
-
-    @Test
-    public void testWhenMultipartUploadEnabledWithCustomKMSThenKMSIsAppliedToMultipart() {
-        String messageBody = generateStringWithLength(MORE_THAN_MULTIPART_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD)
-                .withServerSideEncryption(SERVER_SIDE_ENCRYPTION_CUSTOM_STRATEGY);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        assertEquals(SERVER_SIDE_ENCRYPTION_CUSTOM_STRATEGY, extendedClientConfiguration.getServerSideEncryptionStrategy());
-        verify(mockSqsBackend, times(1)).sendMessage(isA(SendMessageRequest.class));
-    }
-
-    @Test
-    public void testWhenMultipartUploadEnabledAtExactThresholdThenMultipartIsNotUsed() {
-        String messageBody = generateStringWithLength(MULTIPART_UPLOAD_THRESHOLD);
-        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration()
-                .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD);
-        SqsClient sqsExtended = spy(new AmazonSQSExtendedClient(mockSqsBackend, extendedClientConfiguration));
-
-        SendMessageRequest messageRequest = SendMessageRequest.builder().queueUrl(SQS_QUEUE_URL).messageBody(messageBody).build();
-        sqsExtended.sendMessage(messageRequest);
-
-        verify(mockS3, times(1)).putObject(isA(PutObjectRequest.class), isA(RequestBody.class));
+        // Verify S3 storage with KMS
+        ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(mockS3, times(1)).putObject(s3Captor.capture(), any(RequestBody.class));
+        assertEquals(S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID, s3Captor.getValue().ssekmsKeyId());
+        
+        // Verify message sent to SQS with pointer
+        verify(mockSqsBackend, times(1)).sendMessage(any(SendMessageRequest.class));
     }
 
 }

@@ -24,6 +24,7 @@ import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,11 +34,19 @@ import java.util.UUID;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.AwsRequest;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.util.VersionInfo;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
@@ -75,13 +84,17 @@ import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
 import software.amazon.awssdk.utils.StringUtils;
+import software.amazon.awssdk.utils.IoUtils;
 import software.amazon.payloadoffloading.PayloadStore;
-import software.amazon.payloadoffloading.MultipartPayloadStore;
+import software.amazon.payloadoffloading.StreamPayloadStore;
 import software.amazon.payloadoffloading.S3BackedPayloadStore;
-import software.amazon.payloadoffloading.S3BackedMultipartPayloadStore;
+import software.amazon.payloadoffloading.S3BackedStreamPayloadStore;
 import software.amazon.payloadoffloading.S3Dao;
 import software.amazon.payloadoffloading.Util;
 
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 
 /**
  * Amazon SQS Extended Client extends the functionality of Amazon SQS client.
@@ -144,16 +157,26 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
     public AmazonSQSExtendedClient(SqsClient sqsClient, ExtendedClientConfiguration extendedClientConfig) {
         super(sqsClient);
         this.clientConfiguration = new ExtendedClientConfiguration(extendedClientConfig);
-        S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(),
-                clientConfiguration.getServerSideEncryptionStrategy(),
-                clientConfiguration.getObjectCannedACL());
-        if (clientConfiguration.isMultipartUploadEnabled()) {
-            this.payloadStore = new S3BackedMultipartPayloadStore(
-                s3Dao,
-                clientConfiguration.getS3BucketName(),
-                clientConfiguration.getMultipartUploadPartSize(),
-                clientConfiguration.getMultipartUploadThreshold());
+        if (clientConfiguration.isStreamUploadEnabled()) {
+            S3AsyncClient s3AsyncClient = S3AsyncClient.builder()
+                .multipartEnabled(true)
+                .multipartConfiguration(
+                    multipartConfig -> multipartConfig
+                        .minimumPartSizeInBytes(clientConfiguration.getStreamUploadPartSize())
+                        .thresholdInBytes(clientConfiguration.getStreamUploadThreshold())
+                )
+                // .credentialsProvider(DefaultCredentialsProvider.create())
+                .endpointOverride(URI.create("http://localhost:4566"))
+                .forcePathStyle(true)
+                .credentialsProvider(StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create("dummy", "dummy")))
+                .region(Region.of(clientConfiguration.getS3Region()))
+                .build();
+
+            S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(), s3AsyncClient, clientConfiguration.getServerSideEncryptionStrategy(), clientConfiguration.getObjectCannedACL());
+            this.payloadStore = new S3BackedStreamPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
         } else {
+            S3Dao s3Dao = new S3Dao(clientConfiguration.getS3Client(), clientConfiguration.getS3AsyncClient(), clientConfiguration.getServerSideEncryptionStrategy(), clientConfiguration.getObjectCannedACL());
             this.payloadStore = new S3BackedPayloadStore(s3Dao, clientConfiguration.getS3BucketName());
         }
     }
@@ -384,6 +407,88 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
         receiveMessageResponseBuilder.messages(modifiedMessages);
         return receiveMessageResponseBuilder.build();
+    }
+
+    public ReceiveStreamMessageResponse receiveMessageAsStream(ReceiveMessageRequest receiveMessageRequest) {
+        //TODO: Clone request since it's modified in this method and will cause issues if the client reuses request object.
+        if (receiveMessageRequest == null) {
+            String errorMessage = "receiveMessageRequest cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        ReceiveMessageRequest.Builder receiveMessageRequestBuilder = receiveMessageRequest.toBuilder();
+        appendUserAgent(receiveMessageRequestBuilder);
+
+        if (!clientConfiguration.isPayloadSupportEnabled()) {
+            // If payload support is disabled, fall back to regular receive and wrap in StreamMessage with null streams
+            ReceiveMessageResponse response = super.receiveMessage(receiveMessageRequestBuilder.build());
+            List<StreamMessage> streamMessages = response.messages().stream()
+                .map(message -> new StreamMessage(message, null))
+                .collect(java.util.stream.Collectors.toList());
+            return new ReceiveStreamMessageResponse(streamMessages);
+        }
+
+        //Remove before adding to avoid any duplicates
+        List<String> messageAttributeNames = new ArrayList<>(receiveMessageRequest.messageAttributeNames());
+        messageAttributeNames.removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+        messageAttributeNames.addAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+        receiveMessageRequestBuilder.messageAttributeNames(messageAttributeNames);
+        receiveMessageRequest = receiveMessageRequestBuilder.build();
+
+        ReceiveMessageResponse receiveMessageResponse = super.receiveMessage(receiveMessageRequest);
+        List<StreamMessage> streamMessages = new ArrayList<>(receiveMessageResponse.messages().size());
+
+        for (Message message : receiveMessageResponse.messages()) {
+            Message.Builder messageBuilder = message.toBuilder();
+            ResponseInputStream<GetObjectResponse> payloadStream = null;
+
+            // for each received message check if they are stored in S3.
+            Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
+            if (largePayloadAttributeName.isPresent()) {
+                String largeMessagePointer = message.body();
+                largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
+
+                try {
+                    if (payloadStore instanceof StreamPayloadStore) {
+                        payloadStream = ((StreamPayloadStore) payloadStore).getOriginalPayloadStreamStream(largeMessagePointer);
+                    } else {
+                        // Fallback: load into memory and create a stream from it
+                        System.out.println("Warning: payload store is not a StreamPayloadStore, loading entire payload into memory");
+                        String payload = payloadStore.getOriginalPayload(largeMessagePointer);
+                        ByteArrayInputStream byteStream = new ByteArrayInputStream(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        payloadStream = new ResponseInputStream<>(GetObjectResponse.builder().build(), byteStream);
+                    }
+                } catch (SdkException e) {
+                    if (e.getCause() instanceof NoSuchKeyException && clientConfiguration.ignoresPayloadNotFound()) {
+                        DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+                                .builder()
+                                .queueUrl(receiveMessageRequest.queueUrl())
+                                .receiptHandle(message.receiptHandle())
+                                .build();
+                        deleteMessage(deleteMessageRequest);
+                        LOG.warn("Message deleted from SQS since payload with pointer could not be found in S3.");
+                        continue;
+                    } else throw e;
+                }
+
+                // remove the additional attribute before returning the message to user
+                Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(message.messageAttributes());
+                messageAttributes.keySet().removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
+                messageBuilder.messageAttributes(messageAttributes);
+
+                // Embed s3 object pointer in the receipt handle.
+                String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
+                        message.receiptHandle(),
+                        largeMessagePointer);
+
+                messageBuilder.receiptHandle(modifiedReceiptHandle);
+            }
+
+            streamMessages.add(new StreamMessage(messageBuilder.build(), payloadStream));
+        }
+
+        return new ReceiveStreamMessageResponse(streamMessages);
     }
 
     /**
@@ -664,6 +769,150 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     /**
      * <p>
+     * Delivers a message to the specified queue using an InputStream for the message body.
+     * This method allows sending large messages without loading them entirely into memory.
+     * </p>
+     *
+     * @param sendMessageRequest The send message request with message body as InputStream
+     * @param messageBodyStream InputStream containing the message body content
+     * @param contentLength The total length of the content in the stream
+     * @return Result of the SendMessage operation returned by the service.
+     */
+    public SendMessageResponse sendStreamMessage(SendMessageRequest sendMessageRequest, InputStream messageBodyStream, long contentLength) {
+        if (sendMessageRequest == null) {
+            String errorMessage = "sendMessageRequest cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
+        sendMessageRequest = appendUserAgent(sendMessageRequestBuilder).build();
+
+        if (!clientConfiguration.isPayloadSupportEnabled()) {
+            // Convert stream to string for non-extended client
+            try {
+                String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStream);
+                sendMessageRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
+                return super.sendMessage(sendMessageRequest);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read from InputStream", e);
+            }
+        }
+
+        if (messageBodyStream == null) {
+            String errorMessage = "messageBodyStream cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        //Check message attributes for ExtendedClient related constraints
+        checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), sendMessageRequest.messageAttributes());
+
+        if (clientConfiguration.isAlwaysThroughS3()
+            || contentLength >= clientConfiguration.getPayloadSizeThreshold()) {
+            sendMessageRequest = storeStreamMessageInS3(sendMessageRequest, messageBodyStream, contentLength);
+        } else {
+            // Convert stream to string for small messages
+            try {
+                String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStream);
+                sendMessageRequest = sendMessageRequest.toBuilder().messageBody(messageBody).build();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read from InputStream", e);
+            }
+        }
+        return super.sendMessage(sendMessageRequest);
+    }
+
+    /**
+     * <p>
+     * Delivers up to ten messages to the specified queue using InputStreams for message bodies.
+     * This method allows sending large messages without loading them entirely into memory.
+     * </p>
+     *
+     * @param sendMessageBatchRequest The send message batch request
+     * @param messageBodyStreams List of InputStreams containing message body content for each entry
+     * @param contentLengths List of content lengths corresponding to each stream
+     * @return Result of the SendMessageBatch operation returned by the service.
+     */
+    public SendMessageBatchResponse sendStreamMessageBatch(SendMessageBatchRequest sendMessageBatchRequest,
+                                                          java.util.List<InputStream> messageBodyStreams,
+                                                          java.util.List<Long> contentLengths) {
+
+        if (sendMessageBatchRequest == null) {
+            String errorMessage = "sendMessageBatchRequest cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        if (messageBodyStreams == null || contentLengths == null) {
+            String errorMessage = "messageBodyStreams and contentLengths cannot be null.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        if (messageBodyStreams.size() != sendMessageBatchRequest.entries().size() ||
+            contentLengths.size() != sendMessageBatchRequest.entries().size()) {
+            String errorMessage = "messageBodyStreams and contentLengths must have the same size as batch entries.";
+            LOG.error(errorMessage);
+            throw SdkClientException.create(errorMessage);
+        }
+
+        SendMessageBatchRequest.Builder sendMessageBatchRequestBuilder = sendMessageBatchRequest.toBuilder();
+        appendUserAgent(sendMessageBatchRequestBuilder);
+        sendMessageBatchRequest = sendMessageBatchRequestBuilder.build();
+
+        if (!clientConfiguration.isPayloadSupportEnabled()) {
+            // Convert streams to strings for non-extended client
+            java.util.List<SendMessageBatchRequestEntry> entries = new java.util.ArrayList<>();
+            for (int i = 0; i < sendMessageBatchRequest.entries().size(); i++) {
+                SendMessageBatchRequestEntry entry = sendMessageBatchRequest.entries().get(i);
+                try {
+                    String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(messageBodyStreams.get(i));
+                    entries.add(entry.toBuilder().messageBody(messageBody).build());
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to read from InputStream", e);
+                }
+            }
+            sendMessageBatchRequest = sendMessageBatchRequest.toBuilder().entries(entries).build();
+            return super.sendMessageBatch(sendMessageBatchRequest);
+        }
+
+        List<SendMessageBatchRequestEntry> batchEntries = new ArrayList<>(sendMessageBatchRequest.entries().size());
+
+        boolean hasS3Entries = false;
+        for (int i = 0; i < sendMessageBatchRequest.entries().size(); i++) {
+            SendMessageBatchRequestEntry entry = sendMessageBatchRequest.entries().get(i);
+            InputStream stream = messageBodyStreams.get(i);
+            long contentLength = contentLengths.get(i);
+
+            //Check message attributes for ExtendedClient related constraints
+            checkMessageAttributes(clientConfiguration.getPayloadSizeThreshold(), entry.messageAttributes());
+
+            if (clientConfiguration.isAlwaysThroughS3()
+                || contentLength >= clientConfiguration.getPayloadSizeThreshold()) {
+                entry = storeStreamMessageInS3(entry, stream, contentLength);
+                hasS3Entries = true;
+            } else {
+                // Convert stream to string for small messages
+                try {
+                    String messageBody = software.amazon.awssdk.utils.IoUtils.toUtf8String(stream);
+                    entry = entry.toBuilder().messageBody(messageBody).build();
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to read from InputStream", e);
+                }
+            }
+            batchEntries.add(entry);
+        }
+
+        if (hasS3Entries) {
+            sendMessageBatchRequest = sendMessageBatchRequest.toBuilder().entries(batchEntries).build();
+        }
+
+        return super.sendMessageBatch(sendMessageBatchRequest);
+    }
+
+    /**
+     * <p>
      * Deletes up to ten messages from the specified queue. This is a batch version of
      * <code> <a>DeleteMessage</a>.</code> The result of the action on each message is reported individually in the
      * response.
@@ -905,32 +1154,75 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
 
     private String storeOriginalPayload(String messageContentStr) {
         String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
+        if (StringUtils.isBlank(s3KeyPrefix)) {
+            return payloadStore.storeOriginalPayload(messageContentStr);
+        }
+        return payloadStore.storeOriginalPayload(messageContentStr, s3KeyPrefix + UUID.randomUUID());
+    }
+    
+    private SendMessageRequest storeStreamMessageInS3(SendMessageRequest sendMessageRequest, InputStream messageBodyStream, long contentLength) {
+        SendMessageRequest.Builder sendMessageRequestBuilder = sendMessageRequest.toBuilder();
+
+        sendMessageRequestBuilder.messageAttributes(
+            updateMessageAttributePayloadSize(sendMessageRequest.messageAttributes(), contentLength,
+                clientConfiguration.usesLegacyReservedAttributeName()));
+
+        // Store the message content in S3.
+        String largeMessagePointer = storeOriginalPayload(messageBodyStream);
+        sendMessageRequestBuilder.messageBody(largeMessagePointer);
+
+        return sendMessageRequestBuilder.build();
+    }
+
+    private SendMessageBatchRequestEntry storeStreamMessageInS3(SendMessageBatchRequestEntry batchEntry, InputStream messageBodyStream, long contentLength) {
+        SendMessageBatchRequestEntry.Builder batchEntryBuilder = batchEntry.toBuilder();
+
+        batchEntryBuilder.messageAttributes(
+            updateMessageAttributePayloadSize(batchEntry.messageAttributes(), contentLength,
+                clientConfiguration.usesLegacyReservedAttributeName()));
+
+        // Store the message content in S3.
+        String largeMessagePointer = storeOriginalPayload(messageBodyStream);
+        batchEntryBuilder.messageBody(largeMessagePointer);
+
+        return batchEntryBuilder.build();
+    }
+
+    private String storeOriginalPayload(InputStream messageContentStream) {
+        String s3KeyPrefix = clientConfiguration.getS3KeyPrefix();
         String key = StringUtils.isBlank(s3KeyPrefix) ? UUID.randomUUID().toString() : s3KeyPrefix + UUID.randomUUID();
         
-        if (clientConfiguration.isMultipartUploadEnabled()) {
-            String multipartResult = tryMultipartUpload(messageContentStr, key);
-            if (multipartResult != null) {
-                return multipartResult;
+        if (payloadStore instanceof StreamPayloadStore) {
+            try {
+                return ((StreamPayloadStore) payloadStore).storeOriginalPayloadStream(messageContentStream, key);
+            } catch (RuntimeException e) {
+                LOG.warn("Stream upload attempt failed; falling back to standard single-part upload.");
+                try {
+                    messageContentStream.reset();
+                } catch (Exception resetEx) {
+                    LOG.warn("Failed to reset stream after multipart upload failure, stream may be exhausted", resetEx);
+                    throw e;
+                }
+                // Fall back to reading the stream and using string method
+                try {
+                    String content = IoUtils.toUtf8String(messageContentStream);
+                    return payloadStore.storeOriginalPayload(content, key);
+                } catch (IOException ioEx) {
+                    throw new RuntimeException("Failed to read from InputStream", ioEx);
+                }
             }
         }
         
-        return payloadStore.storeOriginalPayload(messageContentStr, key);
-    }
-
-    private String tryMultipartUpload(String payload, String candidateKey) {
-        long sizeBytes = Util.getStringSizeInBytes(payload);
-        if (sizeBytes < clientConfiguration.getMultipartUploadThreshold()) {
-            return null;
-        }
-
+        // Fall back to reading the stream and using string method
         try {
-            return ((MultipartPayloadStore) payloadStore).storeOriginalPayloadMultipart(payload, candidateKey);
-        } catch (RuntimeException e) {
-            LOG.warn("Multipart upload attempt failed; falling back to standard single-part upload.");
-            return null; 
+            String content = IoUtils.toUtf8String(messageContentStream);
+            return payloadStore.storeOriginalPayload(content, key);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read from InputStream", e);
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
         return AmazonSQSExtendedClientUtil.appendUserAgent(builder, USER_AGENT_NAME, USER_AGENT_VERSION);
     }

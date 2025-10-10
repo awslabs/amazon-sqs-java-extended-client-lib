@@ -226,56 +226,56 @@ public class ExtendedClientConfigurationTest {
     }
 
     @Test
-    public void testMultipartUploadEnabled() {
+    public void testStreamUploadEnabled() {
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadEnabled(true);
+        extendedClientConfiguration.withStreamUploadEnabled(true);
 
-        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
+        assertTrue(extendedClientConfiguration.isStreamUploadEnabled());
     }
 
     @Test
-    public void testMultipartUploadThresholdCustomValue() {
+    public void testStreamUploadThresholdCustomValue() {
         int customThreshold = 10 * 1024 * 1024; // 10MB
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadThreshold(customThreshold);
+        extendedClientConfiguration.withStreamUploadThreshold(customThreshold);
 
-        assertEquals(customThreshold, extendedClientConfiguration.getMultipartUploadThreshold());
+        assertEquals(customThreshold, extendedClientConfiguration.getStreamUploadThreshold());
     }
 
     @Test
-    public void testMultipartUploadPartSizeCustomValue() {
+    public void testStreamUploadPartSizeCustomValue() {
         int customPartSize = 10 * 1024 * 1024; // 10MB
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadPartSize(customPartSize);
+        extendedClientConfiguration.withStreamUploadPartSize(customPartSize);
 
-        assertEquals(customPartSize, extendedClientConfiguration.getMultipartUploadPartSize());
+        assertEquals(customPartSize, extendedClientConfiguration.getStreamUploadPartSize());
     }
 
     @Test
-    public void testMultipartUploadPartSizeBelowMinimumRoundedUpTo5MB() {
+    public void testStreamUploadPartSizeBelowMinimumRoundedUpTo5MB() {
         int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
         ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadPartSize(belowMinimum);
+        extendedClientConfiguration.withStreamUploadPartSize(belowMinimum);
 
-        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadPartSize());
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadPartSize());
     }
 
     @Test
-    public void testMultipartConfigurationInCopyConstructor() {
+    public void testStreamConfigurationInCopyConstructor() {
         S3Client s3 = mock(S3Client.class);
         int customThreshold = 10 * 1024 * 1024;
         int customPartSize = 8 * 1024 * 1024;
 
         ExtendedClientConfiguration originalConfig = new ExtendedClientConfiguration();
         originalConfig.withPayloadSupportEnabled(s3, s3BucketName)
-                .withMultipartUploadEnabled(true)
-                .withMultipartUploadThreshold(customThreshold)
-                .withMultipartUploadPartSize(customPartSize);
+                .withStreamUploadEnabled(true)
+                .withStreamUploadThreshold(customThreshold)
+                .withStreamUploadPartSize(customPartSize);
 
         ExtendedClientConfiguration copiedConfig = new ExtendedClientConfiguration(originalConfig);
 
-        assertTrue(copiedConfig.isMultipartUploadEnabled());
-        assertEquals(customThreshold, copiedConfig.getMultipartUploadThreshold());
-        assertEquals(customPartSize, copiedConfig.getMultipartUploadPartSize());
+        assertTrue(copiedConfig.isStreamUploadEnabled());
+        assertEquals(customThreshold, copiedConfig.getStreamUploadThreshold());
+        assertEquals(customPartSize, copiedConfig.getStreamUploadPartSize());
     }
 }

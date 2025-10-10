@@ -214,27 +214,32 @@ public class ExtendedAsyncClientConfiguration extends PayloadStorageAsyncConfigu
     }
 
     /**
-     * Enables or disables multipart upload support for large payload storage operations.
-     * @param enabled true to enable multipart uploads when threshold exceeded.
+     * Enables or disables stream upload support for large payload storage operations.
+     * @param enabled true to enable stream uploads when threshold exceeded.
      * @return updated configuration
      */
-    public ExtendedAsyncClientConfiguration withMultipartUploadEnabled(boolean enabled) {
-        setMultipartUploadEnabled(enabled);
+    public ExtendedAsyncClientConfiguration withStreamUploadEnabled(boolean enabled) {
+        setStreamUploadEnabled(enabled);
         return this;
     }
 
     /**
-     * Sets the multipart upload threshold (in bytes). Only used when multipart upload is enabled.
-     * @param threshold threshold in bytes (>0). Values <=0 reset to default (5MB)
+     * Sets the threshold for stream upload in bytes.
+     * @param threshold the threshold in bytes
      * @return updated configuration
      */
-    public ExtendedAsyncClientConfiguration withMultipartUploadThreshold(int threshold) {
-        setMultipartUploadThreshold(threshold);
+    public ExtendedAsyncClientConfiguration withStreamUploadThreshold(int threshold) {
+        setStreamUploadThreshold(threshold);
         return this;
     }
 
-    public ExtendedAsyncClientConfiguration withMultipartUploadPartSize(int partSize) {
-        setMultipartUploadPartSize(partSize);
+    public ExtendedAsyncClientConfiguration withStreamUploadPartSize(int partSize) {
+        setStreamUploadPartSize(partSize);
+        return this;
+    }
+
+    public ExtendedAsyncClientConfiguration withS3Region(String s3Region) {
+        setS3Region(s3Region);
         return this;
     }
 }

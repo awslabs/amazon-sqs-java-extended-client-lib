@@ -87,45 +87,45 @@ public class ExtendedAsyncClientConfigurationTest {
     }
 
     @Test
-    public void testMultipartUploadDisabledByDefault() {
+    public void testStreamUploadDisabledByDefault() {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
 
-        assertFalse(extendedClientConfiguration.isMultipartUploadEnabled());
-        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadThreshold()); // 5MB default
+        assertFalse(extendedClientConfiguration.isStreamUploadEnabled());
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadThreshold()); // 5MB default
     }
 
     @Test
-    public void testMultipartUploadEnabled() {
+    public void testStreamUploadEnabled() {
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadEnabled(true);
+        extendedClientConfiguration.withStreamUploadEnabled(true);
 
-        assertTrue(extendedClientConfiguration.isMultipartUploadEnabled());
+        assertTrue(extendedClientConfiguration.isStreamUploadEnabled());
     }
 
     @Test
-    public void testMultipartUploadThresholdCustomValue() {
+    public void testStreamUploadThresholdCustomValue() {
         int customThreshold = 10 * 1024 * 1024; // 10MB
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadThreshold(customThreshold);
+        extendedClientConfiguration.withStreamUploadThreshold(customThreshold);
 
-        assertEquals(customThreshold, extendedClientConfiguration.getMultipartUploadThreshold());
+        assertEquals(customThreshold, extendedClientConfiguration.getStreamUploadThreshold());
     }
 
     @Test
-    public void testMultipartUploadPartSizeCustomValue() {
+    public void testStreamUploadPartSizeCustomValue() {
         int customPartSize = 10 * 1024 * 1024; // 10MB
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadPartSize(customPartSize);
+        extendedClientConfiguration.withStreamUploadPartSize(customPartSize);
 
-        assertEquals(customPartSize, extendedClientConfiguration.getMultipartUploadPartSize());
+        assertEquals(customPartSize, extendedClientConfiguration.getStreamUploadPartSize());
     }
 
     @Test
-    public void testMultipartUploadPartSizeBelowMinimumRoundedUpTo5MB() {
+    public void testStreamUploadPartSizeBelowMinimumRoundedUpTo5MB() {
         int belowMinimum = 3 * 1024 * 1024; // 3MB (below 5MB minimum)
         ExtendedAsyncClientConfiguration extendedClientConfiguration = new ExtendedAsyncClientConfiguration();
-        extendedClientConfiguration.withMultipartUploadPartSize(belowMinimum);
+        extendedClientConfiguration.withStreamUploadPartSize(belowMinimum);
 
-        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getMultipartUploadPartSize());
+        assertEquals(5 * 1024 * 1024, extendedClientConfiguration.getStreamUploadPartSize());
     }
 }
