@@ -15,45 +15,13 @@
 
 package com.amazon.sqs.javamessaging;
 
-import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
-import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
 import static com.amazon.sqs.javamessaging.StringTestUtil.generateStringWithLength;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
-
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -83,6 +51,41 @@ import software.amazon.awssdk.utils.StringInputStream;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
 import software.amazon.payloadoffloading.ServerSideEncryptionFactory;
 import software.amazon.payloadoffloading.ServerSideEncryptionStrategy;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_NAME;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClient.USER_AGENT_VERSION;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.io.InputStream;
+
 
 /**
  * Tests the AmazonSQSExtendedClient class.
@@ -834,13 +837,10 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testSendStreamMessage_LargeFileUpload_StoresInS3AndSendsPointer() {
-        // Use case: Uploading a large file (e.g., 6MB) via stream to avoid loading in memory
-        // Also tests StreamPayloadStore multipart upload path when stream upload is enabled
-        int fileSizeBytes = MORE_THAN_STREAM_THRESHOLD; // 6MB - above stream threshold
+        int fileSizeBytes = MORE_THAN_STREAM_THRESHOLD; 
         String fileContent = generateStringWithLength(fileSizeBytes);
         java.io.InputStream fileStream = new java.io.ByteArrayInputStream(fileContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         
-        // Create client with stream upload enabled to test StreamPayloadStore path
         ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withStreamUploadEnabled(true)
@@ -913,10 +913,6 @@ public class AmazonSQSExtendedClientTest {
 
     @Test
     public void testSendStreamMessageBatch_MixedSizes_OnlyLargeMessagesUseS3() {
-        // Use case: Batch with mixed sizes - small goes direct, large goes to S3
-        // Also tests StreamPayloadStore multipart upload path for very large messages
-        
-        // Create client with stream upload enabled to test StreamPayloadStore path
         ExtendedClientConfiguration streamConfig = new ExtendedClientConfiguration()
             .withPayloadSupportEnabled(mockS3, S3_BUCKET_NAME)
             .withStreamUploadEnabled(true)
@@ -962,7 +958,6 @@ public class AmazonSQSExtendedClientTest {
 
         ((AmazonSQSExtendedClient) streamClient).sendStreamMessageBatch(batchRequest, streams, contentLengths);
 
-        // Verify 2 large messages stored in S3 (300KB and 6MB)
         ArgumentCaptor<SendMessageBatchRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageBatchRequest.class);
         verify(mockSqsBackend, times(1)).sendMessageBatch(sqsCaptor.capture());
         SendMessageBatchRequestEntry firstEntry = sqsCaptor.getValue().entries().get(0);
@@ -992,12 +987,9 @@ public class AmazonSQSExtendedClientTest {
 
         ((AmazonSQSExtendedClient) extendedSqsWithCustomKMS).sendStreamMessage(request, stream, dataSize);
 
-        // Verify S3 storage with KMS
         ArgumentCaptor<PutObjectRequest> s3Captor = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(mockS3, times(1)).putObject(s3Captor.capture(), any(RequestBody.class));
         assertEquals(S3_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID, s3Captor.getValue().ssekmsKeyId());
-        
-        // Verify message sent to SQS with pointer
         verify(mockSqsBackend, times(1)).sendMessage(any(SendMessageRequest.class));
     }
 
