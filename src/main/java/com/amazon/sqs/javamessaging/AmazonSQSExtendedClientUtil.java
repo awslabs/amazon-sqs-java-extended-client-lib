@@ -1,5 +1,8 @@
 package com.amazon.sqs.javamessaging;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +24,7 @@ import software.amazon.payloadoffloading.Util;
 
 public class AmazonSQSExtendedClientUtil {
     private static final Log LOG = LogFactory.getLog(AmazonSQSExtendedClientUtil.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static final String LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize";
     public static final List<String> RESERVED_ATTRIBUTE_NAMES = Arrays.asList(LEGACY_RESERVED_ATTRIBUTE_NAME,
@@ -136,6 +140,32 @@ public class AmazonSQSExtendedClientUtil {
                     .addApiName(ApiName.builder().name(userAgentName)
                         .version(userAgentVersion).build())
                     .build());
+    }
+
+    public static String extractMessageFromSnsJson(String snsJson) {
+        try {
+            JsonNode rootNode = MAPPER.readTree(snsJson);
+            if (rootNode.has("Message")) {
+                return rootNode.get("Message").asText();
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to parse SNS JSON message body", e);
+        }
+        return snsJson;
+    }
+
+    public static String updateMessageInSnsJson(String snsJson, String newMessage) {
+        try {
+            JsonNode rootNode = MAPPER.readTree(snsJson);
+            if (rootNode.isObject() && rootNode.has("Message")) {
+                ObjectNode objectNode = (ObjectNode) rootNode;
+                objectNode.put("Message", newMessage);
+                return MAPPER.writeValueAsString(objectNode);
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to update SNS JSON message body", e);
+        }
+        return newMessage;
     }
 
     private static String getFromReceiptHandleByMarker(String receiptHandle, String marker) {

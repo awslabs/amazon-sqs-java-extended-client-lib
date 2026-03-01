@@ -56,7 +56,8 @@ public class ExtendedClientConfigurationTest {
 
         extendedClientConfig.withPayloadSupportEnabled(s3, s3BucketName, doesCleanupS3Payload)
                 .withAlwaysThroughS3(alwaysThroughS3).withPayloadSizeThreshold(messageSizeThreshold)
-                .withServerSideEncryption(serverSideEncryptionStrategy);
+                .withServerSideEncryption(serverSideEncryptionStrategy)
+                .withPayloadSupportFromSnsEnabled(true);
 
         ExtendedClientConfiguration newExtendedClientConfig = new ExtendedClientConfiguration(extendedClientConfig);
 
@@ -67,8 +68,22 @@ public class ExtendedClientConfigurationTest {
         assertEquals(doesCleanupS3Payload, newExtendedClientConfig.doesCleanupS3Payload());
         assertEquals(alwaysThroughS3, newExtendedClientConfig.isAlwaysThroughS3());
         assertEquals(messageSizeThreshold, newExtendedClientConfig.getPayloadSizeThreshold());
+        assertTrue(newExtendedClientConfig.isPayloadSupportFromSnsEnabled());
 
         assertNotSame(newExtendedClientConfig, extendedClientConfig);
+    }
+
+    @Test
+    public void testPayloadSupportFromSnsEnabledDefault() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        assertFalse(extendedClientConfiguration.isPayloadSupportFromSnsEnabled());
+    }
+
+    @Test
+    public void testPayloadSupportFromSnsEnabledSet() {
+        ExtendedClientConfiguration extendedClientConfiguration = new ExtendedClientConfiguration();
+        extendedClientConfiguration.setPayloadSupportFromSnsEnabled(true);
+        assertTrue(extendedClientConfiguration.isPayloadSupportFromSnsEnabled());
     }
 
     @Test
