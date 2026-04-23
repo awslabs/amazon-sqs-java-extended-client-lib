@@ -25,6 +25,8 @@ import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
 import software.amazon.awssdk.services.sqs.model.AddPermissionResponse;
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
 import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
+import software.amazon.awssdk.services.sqs.model.CancelMessageMoveTaskRequest;
+import software.amazon.awssdk.services.sqs.model.CancelMessageMoveTaskResponse;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchResponse;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
@@ -48,6 +50,8 @@ import software.amazon.awssdk.services.sqs.model.InvalidIdFormatException;
 import software.amazon.awssdk.services.sqs.model.InvalidMessageContentsException;
 import software.amazon.awssdk.services.sqs.model.ListDeadLetterSourceQueuesRequest;
 import software.amazon.awssdk.services.sqs.model.ListDeadLetterSourceQueuesResponse;
+import software.amazon.awssdk.services.sqs.model.ListMessageMoveTasksRequest;
+import software.amazon.awssdk.services.sqs.model.ListMessageMoveTasksResponse;
 import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
 import software.amazon.awssdk.services.sqs.model.ListQueueTagsResponse;
 import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
@@ -72,6 +76,8 @@ import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesResponse;
 import software.amazon.awssdk.services.sqs.model.SqsException;
+import software.amazon.awssdk.services.sqs.model.StartMessageMoveTaskRequest;
+import software.amazon.awssdk.services.sqs.model.StartMessageMoveTaskResponse;
 import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
 import software.amazon.awssdk.services.sqs.model.TagQueueResponse;
 import software.amazon.awssdk.services.sqs.model.TooManyEntriesInBatchRequestException;
@@ -1110,6 +1116,27 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
     /** {@inheritDoc} */
     @Override public UntagQueueResponse untagQueue(final UntagQueueRequest untagQueueRequest) {
         return amazonSqsToBeExtended.untagQueue(untagQueueRequest);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public StartMessageMoveTaskResponse startMessageMoveTask(
+            StartMessageMoveTaskRequest startMessageMoveTaskRequest) {
+        return amazonSqsToBeExtended.startMessageMoveTask(startMessageMoveTaskRequest);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public ListMessageMoveTasksResponse listMessageMoveTasks(
+            ListMessageMoveTasksRequest listMessageMoveTasksRequest) {
+        return amazonSqsToBeExtended.listMessageMoveTasks(listMessageMoveTasksRequest);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CancelMessageMoveTaskResponse cancelMessageMoveTask(
+            CancelMessageMoveTaskRequest cancelMessageMoveTaskRequest) {
+        return amazonSqsToBeExtended.cancelMessageMoveTask(cancelMessageMoveTaskRequest);
     }
 
     @Override
