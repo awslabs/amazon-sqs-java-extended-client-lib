@@ -21,6 +21,7 @@ import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.SqsServiceClientConfiguration;
 import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
 import software.amazon.awssdk.services.sqs.model.AddPermissionResponse;
 import software.amazon.awssdk.services.sqs.model.BatchEntryIdsNotDistinctException;
@@ -1110,6 +1111,11 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
     /** {@inheritDoc} */
     @Override public UntagQueueResponse untagQueue(final UntagQueueRequest untagQueueRequest) {
         return amazonSqsToBeExtended.untagQueue(untagQueueRequest);
+    }
+
+    /** {@inheritDoc} */
+    @Override public SqsServiceClientConfiguration serviceClientConfiguration() {
+        return amazonSqsToBeExtended.serviceClientConfiguration();
     }
 
     @Override

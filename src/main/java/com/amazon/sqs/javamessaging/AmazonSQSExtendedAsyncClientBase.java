@@ -2,6 +2,7 @@ package com.amazon.sqs.javamessaging;
 
 import java.util.concurrent.CompletableFuture;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
+import software.amazon.awssdk.services.sqs.SqsServiceClientConfiguration;
 import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
 import software.amazon.awssdk.services.sqs.model.AddPermissionResponse;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
@@ -224,6 +225,14 @@ abstract class AmazonSQSExtendedAsyncClientBase implements SqsAsyncClient {
     @Override
     public CompletableFuture<UntagQueueResponse> untagQueue(final UntagQueueRequest untagQueueRequest) {
         return amazonSqsToBeExtended.untagQueue(untagQueueRequest);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public SqsServiceClientConfiguration serviceClientConfiguration() {
+        return amazonSqsToBeExtended.serviceClientConfiguration();
     }
 
     /**
