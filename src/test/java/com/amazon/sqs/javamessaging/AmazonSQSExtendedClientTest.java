@@ -39,6 +39,10 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.CancelMessageMoveTaskRequest;
+import software.amazon.awssdk.services.sqs.model.CancelMessageMoveTaskResponse;
+import software.amazon.awssdk.services.sqs.model.ListMessageMoveTasksRequest;
+import software.amazon.awssdk.services.sqs.model.ListMessageMoveTasksResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
@@ -46,6 +50,8 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.StartMessageMoveTaskRequest;
+import software.amazon.awssdk.services.sqs.model.StartMessageMoveTaskResponse;
 import software.amazon.awssdk.utils.ImmutableMap;
 import software.amazon.awssdk.utils.StringInputStream;
 import software.amazon.payloadoffloading.PayloadS3Pointer;
@@ -755,6 +761,55 @@ public class AmazonSQSExtendedClientTest {
             assertEquals(NoSuchKeyException.class.getName(), e.getCause().getClass().getName());
             verify(mockSqsBackend, never()).deleteMessage(any(DeleteMessageRequest.class));
         }
+    }
+
+    @Test
+    public void testStartMessageMoveTaskDelegatesToUnderlyingClient() {
+        StartMessageMoveTaskRequest request = StartMessageMoveTaskRequest.builder()
+                .sourceArn("arn:aws:sqs:us-east-1:123456789012:source-dlq")
+                .build();
+        StartMessageMoveTaskResponse expectedResponse = StartMessageMoveTaskResponse.builder()
+                .taskHandle("task-handle")
+                .build();
+        when(mockSqsBackend.startMessageMoveTask(isA(StartMessageMoveTaskRequest.class)))
+                .thenReturn(expectedResponse);
+
+        StartMessageMoveTaskResponse response = extendedSqsWithDefaultConfig.startMessageMoveTask(request);
+
+        assertEquals(expectedResponse, response);
+        verify(mockSqsBackend).startMessageMoveTask(request);
+    }
+
+    @Test
+    public void testListMessageMoveTasksDelegatesToUnderlyingClient() {
+        ListMessageMoveTasksRequest request = ListMessageMoveTasksRequest.builder()
+                .sourceArn("arn:aws:sqs:us-east-1:123456789012:source-dlq")
+                .build();
+        ListMessageMoveTasksResponse expectedResponse = ListMessageMoveTasksResponse.builder().build();
+        when(mockSqsBackend.listMessageMoveTasks(isA(ListMessageMoveTasksRequest.class)))
+                .thenReturn(expectedResponse);
+
+        ListMessageMoveTasksResponse response = extendedSqsWithDefaultConfig.listMessageMoveTasks(request);
+
+        assertEquals(expectedResponse, response);
+        verify(mockSqsBackend).listMessageMoveTasks(request);
+    }
+
+    @Test
+    public void testCancelMessageMoveTaskDelegatesToUnderlyingClient() {
+        CancelMessageMoveTaskRequest request = CancelMessageMoveTaskRequest.builder()
+                .taskHandle("task-handle")
+                .build();
+        CancelMessageMoveTaskResponse expectedResponse = CancelMessageMoveTaskResponse.builder()
+                .approximateNumberOfMessagesMoved(42L)
+                .build();
+        when(mockSqsBackend.cancelMessageMoveTask(isA(CancelMessageMoveTaskRequest.class)))
+                .thenReturn(expectedResponse);
+
+        CancelMessageMoveTaskResponse response = extendedSqsWithDefaultConfig.cancelMessageMoveTask(request);
+
+        assertEquals(expectedResponse, response);
+        verify(mockSqsBackend).cancelMessageMoveTask(request);
     }
 
     private DeleteMessageBatchRequest generateLargeDeleteBatchRequest(List<String> originalReceiptHandles) {
