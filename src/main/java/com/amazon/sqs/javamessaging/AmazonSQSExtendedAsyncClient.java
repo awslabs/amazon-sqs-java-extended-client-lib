@@ -2,12 +2,14 @@ package com.amazon.sqs.javamessaging;
 
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.checkMessageAttributes;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.embedS3PointerInReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.extractMessageFromSnsJson;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getMessagePointerFromModifiedReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getOrigReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getReservedAttributeNameIfPresent;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageInSnsJson;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -211,15 +213,26 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                 for (Message message : messages) {
                     Message.Builder messageBuilder = message.toBuilder();
 
+                    final String originalBody = message.body();
+                    String effectiveBody = originalBody;
+                    if (clientConfiguration.isPayloadSupportFromSnsEnabled()) {
+                        effectiveBody = extractMessageFromSnsJson(originalBody);
+                    }
+
+                    final Message messageToProcess = messageBuilder.body(effectiveBody).build();
+
                     // For each received message check if they are stored in S3.
                     Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(
-                        message.messageAttributes());
+                        messageToProcess.messageAttributes());
                     if (!largePayloadAttributeName.isPresent()) {
                         // Not S3
+                        // If it was SNS, the builder already has effectiveBody, but we want to return originalBody
+                        // if it's not a large payload, to preserve the envelope.
+                        messageBuilder.body(originalBody);
                         modifiedMessageFutures.add(CompletableFuture.completedFuture(messageBuilder.build()));
                     } else {
                         // In S3
-                        final String largeMessagePointer = message.body()
+                        final String largeMessagePointer = messageToProcess.body()
                             .replace("com.amazon.sqs.javamessaging.MessageS3Pointer",
                                 "software.amazon.payloadoffloading.PayloadS3Pointer");
 
@@ -234,7 +247,7 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                                         DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
                                                 .builder()
                                                 .queueUrl(queueUrl)
-                                                .receiptHandle(message.receiptHandle())
+                                                .receiptHandle(messageToProcess.receiptHandle())
                                                 .build();
 
                                         deleteMessage(deleteMessageRequest).join();
@@ -248,18 +261,22 @@ public class AmazonSQSExtendedAsyncClient extends AmazonSQSExtendedAsyncClientBa
                                 }
 
                                 // Set original payload
-                                messageBuilder.body(originalPayload);
+                                if (clientConfiguration.isPayloadSupportFromSnsEnabled()) {
+                                    messageBuilder.body(updateMessageInSnsJson(originalBody, originalPayload));
+                                } else {
+                                    messageBuilder.body(originalPayload);
+                                }
 
                                 // Remove the additional attribute before returning the message
                                 // to user.
                                 Map<String, MessageAttributeValue> messageAttributes = new HashMap<>(
-                                    message.messageAttributes());
+                                    messageToProcess.messageAttributes());
                                 messageAttributes.keySet().removeAll(AmazonSQSExtendedClientUtil.RESERVED_ATTRIBUTE_NAMES);
                                 messageBuilder.messageAttributes(messageAttributes);
 
                                 // Embed s3 object pointer in the receipt handle.
                                 String modifiedReceiptHandle = embedS3PointerInReceiptHandle(
-                                    message.receiptHandle(),
+                                    messageToProcess.receiptHandle(),
                                     largeMessagePointer);
                                 messageBuilder.receiptHandle(modifiedReceiptHandle);
 

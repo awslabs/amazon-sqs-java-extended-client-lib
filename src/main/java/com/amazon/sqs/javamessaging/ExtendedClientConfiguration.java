@@ -35,6 +35,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
     private boolean cleanupS3Payload = true;
     private boolean useLegacyReservedAttributeName = true;
     private boolean ignorePayloadNotFound = false;
+    private boolean payloadSupportFromSnsEnabled = false;
     private String s3KeyPrefix = "";
 
     public ExtendedClientConfiguration() {
@@ -47,6 +48,7 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
         this.cleanupS3Payload = other.doesCleanupS3Payload();
         this.useLegacyReservedAttributeName = other.usesLegacyReservedAttributeName();
         this.ignorePayloadNotFound = other.ignoresPayloadNotFound();
+        this.payloadSupportFromSnsEnabled = other.isPayloadSupportFromSnsEnabled();
         this.s3KeyPrefix = other.s3KeyPrefix;
     }
 
@@ -194,6 +196,43 @@ public class ExtendedClientConfiguration extends PayloadStorageConfiguration {
      */
     public boolean ignoresPayloadNotFound() {
         return ignorePayloadNotFound;
+    }
+
+    /**
+     * Sets whether or not the client should attempt to find the message body
+     * in the "Message" field of a JSON-formatted SNS message.
+     *
+     * @param payloadSupportFromSnsEnabled
+     *            Whether or not the client should attempt to find the message body
+     *            in the "Message" field of a JSON-formatted SNS message. Default: false
+     */
+    public void setPayloadSupportFromSnsEnabled(boolean payloadSupportFromSnsEnabled) {
+        this.payloadSupportFromSnsEnabled = payloadSupportFromSnsEnabled;
+    }
+
+    /**
+     * Sets whether or not the client should attempt to find the message body
+     * in the "Message" field of a JSON-formatted SNS message.
+     *
+     * @param payloadSupportFromSnsEnabled
+     *            Whether or not the client should attempt to find the message body
+     *            in the "Message" field of a JSON-formatted SNS message. Default: false
+     * @return the updated ExtendedClientConfiguration object.
+     */
+    public ExtendedClientConfiguration withPayloadSupportFromSnsEnabled(boolean payloadSupportFromSnsEnabled) {
+        setPayloadSupportFromSnsEnabled(payloadSupportFromSnsEnabled);
+        return this;
+    }
+
+    /**
+     * Checks whether or not the client should attempt to find the message body
+     * in the "Message" field of a JSON-formatted SNS message.
+     *
+     * @return True if the client should attempt to find the message body
+     *         in the "Message" field of a JSON-formatted SNS message. Default: false
+     */
+    public boolean isPayloadSupportFromSnsEnabled() {
+        return payloadSupportFromSnsEnabled;
     }
 
     @Override

@@ -17,12 +17,14 @@ package com.amazon.sqs.javamessaging;
 
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.checkMessageAttributes;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.embedS3PointerInReceiptHandle;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.extractMessageFromSnsJson;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getMessagePointerFromModifiedReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getOrigReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.getReservedAttributeNameIfPresent;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isLarge;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.isS3ReceiptHandle;
 import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageAttributePayloadSize;
+import static com.amazon.sqs.javamessaging.AmazonSQSExtendedClientUtil.updateMessageInSnsJson;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -335,14 +337,25 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
         for (Message message : messages) {
             Message.Builder messageBuilder = message.toBuilder();
 
+            String originalBody = message.body();
+            String effectiveBody = originalBody;
+            if (clientConfiguration.isPayloadSupportFromSnsEnabled()) {
+                effectiveBody = extractMessageFromSnsJson(originalBody);
+            }
+
             // for each received message check if they are stored in S3.
             Optional<String> largePayloadAttributeName = getReservedAttributeNameIfPresent(message.messageAttributes());
             if (largePayloadAttributeName.isPresent()) {
-                String largeMessagePointer = message.body();
+                String largeMessagePointer = effectiveBody;
                 largeMessagePointer = largeMessagePointer.replace("com.amazon.sqs.javamessaging.MessageS3Pointer", "software.amazon.payloadoffloading.PayloadS3Pointer");
 
                 try {
-                    messageBuilder.body(payloadStore.getOriginalPayload(largeMessagePointer));
+                    String resolvedPayload = payloadStore.getOriginalPayload(largeMessagePointer);
+                    if (clientConfiguration.isPayloadSupportFromSnsEnabled()) {
+                        messageBuilder.body(updateMessageInSnsJson(originalBody, resolvedPayload));
+                    } else {
+                        messageBuilder.body(resolvedPayload);
+                    }
                 } catch (SdkException e) {
                     if (e.getCause() instanceof NoSuchKeyException && clientConfiguration.ignoresPayloadNotFound()) {
                         DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
