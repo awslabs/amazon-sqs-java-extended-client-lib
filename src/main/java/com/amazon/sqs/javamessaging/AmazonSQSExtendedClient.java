@@ -93,7 +93,7 @@ import software.amazon.payloadoffloading.Util;
  *
  * <ul>
  * <li>Specify whether messages are always stored in Amazon S3 or only when a
- * message size exceeds 256 KB.</li>
+ * message size exceeds 1 MiB.</li>
  * <li>Send a message that references a single message object stored in an
  * Amazon S3 bucket.</li>
  * <li>Get the corresponding message object from an Amazon S3 bucket.</li>
@@ -559,7 +559,7 @@ public class AmazonSQSExtendedClient extends AmazonSQSExtendedClientBase impleme
      * </p>
      * <p>
      * The maximum allowed individual message size and the maximum total payload size (the sum of the individual lengths
-     * of all of the batched messages) are both 256 KB (262,144 bytes).
+     * of all of the batched messages) are both 1 MiB (1,048,576 bytes).
      * </p>
      * <important>
      * <p>
