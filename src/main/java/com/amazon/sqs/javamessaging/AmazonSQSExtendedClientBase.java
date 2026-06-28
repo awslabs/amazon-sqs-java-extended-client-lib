@@ -596,7 +596,7 @@ abstract class AmazonSQSExtendedClientBase implements SqsClient {
      * </p>
      * <p>
      * The maximum allowed individual message size and the maximum total payload size (the sum of the individual lengths
-     * of all of the batched messages) are both 256 KB (262,144 bytes).
+     * of all of the batched messages) are both 1 MiB (1,048,576 bytes).
      * </p>
      * <important>
      * <p>

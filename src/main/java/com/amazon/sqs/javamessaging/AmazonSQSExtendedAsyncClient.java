@@ -70,7 +70,7 @@ import software.amazon.payloadoffloading.Util;
  *
  * <ul>
  * <li>Specify whether messages are always stored in Amazon S3 or only when a
- * message size exceeds 256 KB.</li>
+ * message size exceeds 1 MiB.</li>
  * <li>Send a message that references a single message object stored in an
  * Amazon S3 bucket.</li>
  * <li>Get the corresponding message object from an Amazon S3 bucket.</li>
